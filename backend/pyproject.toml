@@ -1,0 +1,15 @@
+
+# Здесь только конфигурация инструментов.
+# Зависимости — в requirements.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]          # ← корень backend/ в sys.path
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
