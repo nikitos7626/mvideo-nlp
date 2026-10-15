@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.config import settings
 from app.routers import extract
@@ -16,6 +18,13 @@ app.add_middleware(
 )
 
 app.include_router(extract.router)
+
+
+@app.get("/", response_class=FileResponse)
+def root_ui():
+    """Интерактивный веб-интерфейс М.Видео AI."""
+    static_file = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    return FileResponse(static_file)
 
 
 @app.get("/health")

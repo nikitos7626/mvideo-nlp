@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>М.Видео AI · Извлечение характеристик товаров</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mvideo: {
+              red: '#e31235',
+              darkred: '#b80c29',
+              dark: '#1e2229',
+              light: '#f4f5f7'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans">
+
+  <!-- Навигационная панель -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-mvideo-red flex items-center justify-center text-white font-extrabold text-xl shadow-md">
+          M
+        </div>
+        <div>
+          <span class="text-xl font-bold text-gray-900 tracking-tight">М.Видео <span class="text-mvideo-red">AI</span></span>
+          <span class="ml-2 text-xs font-semibold uppercase tracking-wider bg-red-100 text-mvideo-red px-2 py-0.5 rounded-full">VolgaDev 2026</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <a href="/docs" target="_blank" class="text-sm font-medium text-gray-600 hover:text-mvideo-red transition flex items-center">
+          <i class="fa-solid fa-code mr-1.5"></i> Swagger API
+        </a>
+        <div id="api-status" class="flex items-center text-xs text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+          <span class="w-2 h-2 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
+          Сервер онлайн
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Основной контент -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Заголовок страницы -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-extrabold text-gray-900 sm:text-4xl tracking-tight">
+        Автоматическое заполнение характеристик
+      </h1>
+      <p class="mt-2 text-base text-gray-600">
+        Каскадный пайплайн: <span class="font-semibold text-gray-800">Tier 1 (Regex & FlashText)</span> + <span class="font-semibold text-gray-800">Tier 2 (Zero-Shot GLiNER)</span> с калибровкой уверенности и защитой от галлюцинаций.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- ЛЕВАЯ КОЛОНКА: Ввод данных карточки -->
+      <div class="lg:col-span-5 space-y-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-900 flex items-center">
+              <i class="fa-solid fa-file-pen text-mvideo-red mr-2"></i> Входная карточка
+            </h2>
+            <span class="text-xs text-gray-500">Только текст</span>
+          </div>
+
+          <!-- Быстрые пресеты -->
+          <div class="mb-5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Быстрые примеры:</label>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="setPreset('iphone')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
+                📱 iPhone 15 Pro
+              </button>
+              <button onclick="setPreset('redmibook')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
+                💻 RedmiBook 16
+              </button>
+              <button onclick="setPreset('sony')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
+                🎧 Наушники Sony
+              </button>
+            </div>
+          </div>
+
+          <form id="extract-form" onsubmit="handleExtract(event)" class="space-y-4">
+            <div>
+              <label for="title" class="block text-sm font-semibold text-gray-700 mb-1">
+                Название товара (Title) <span class="text-red-500">*</span>
+              </label>
+              <textarea id="title" rows="2" required placeholder="Например: Смартфон Apple iPhone 15 Pro Max 256GB Black Titanium"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+            </div>
+
+            <div>
+              <label for="description" class="block text-sm font-semibold text-gray-700 mb-1">
+                Описание товара (Description)
+              </label>
+              <textarea id="description" rows="4" placeholder="Например: Флагманский процессор Apple A17 Pro. Диагональ экрана 6.7 дюймов OLED Retina 120 Гц. Батарея емкостью 4422 мАч."
+                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+            </div>
+
+            <button type="submit" id="submit-btn"
+              class="w-full py-3.5 px-4 bg-mvideo-red hover:bg-mvideo-darkred text-white font-bold rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Извлечь характеристики</span>
+            </button>
+          </form>
+
+        </div>
+      </div>
+
+      <!-- ПРАВАЯ КОЛОНКА: Результаты работы ИИ -->
+      <div class="lg:col-span-7 space-y-6">
+        
+        <!-- Заглушка до первого запроса -->
+        <div id="empty-state" class="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center h-full flex flex-col items-center justify-center min-h-[420px]">
+          <div class="w-16 h-16 rounded-full bg-red-50 text-mvideo-red flex items-center justify-center text-2xl mb-4">
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <h3 class="text-lg font-bold text-gray-800">Здесь появятся результаты</h3>
+          <p class="text-sm text-gray-500 max-w-sm mt-1">
+            Выберите пример слева или вставьте текст реального товара и нажмите «Извлечь характеристики».
+          </p>
+        </div>
+
+        <!-- Результат -->
+        <div id="results-card" class="hidden space-y-6">
+          
+          <!-- Сводка и статус карточки -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+              <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Статус публикации</span>
+                <div id="status-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"></div>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Общая уверенность</span>
+                <span id="confidence-value" class="text-2xl font-extrabold text-gray-900">0%</span>
+              </div>
+            </div>
+
+            <!-- Прогресс-бар уверенности -->
+            <div class="mt-4">
+              <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                <div id="confidence-bar" class="h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-gray-400 mt-1">
+                <span>0%</span>
+                <span class="text-gray-600 font-semibold">Порог публикации: 75%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            <!-- Незаполненные поля -->
+            <div id="missing-box" class="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-600 flex items-center justify-between">
+              <span>Незаполненные поля:</span>
+              <span id="missing-tags" class="font-semibold text-gray-800"></span>
+            </div>
+          </div>
+
+          <!-- Таблица характеристик -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 class="text-base font-bold text-gray-900 flex items-center">
+                <i class="fa-solid fa-table-list text-mvideo-red mr-2"></i> Извлеченные характеристики
+              </h3>
+              <span id="attr-count" class="text-xs bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-full font-bold">0</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-bold tracking-wider">
+                  <tr>
+                    <th scope="col" class="px-6 py-3 text-left">Атрибут</th>
+                    <th scope="col" class="px-6 py-3 text-left">Каноническое значение</th>
+                    <th scope="col" class="px-6 py-3 text-center">Уверенность</th>
+                    <th scope="col" class="px-6 py-3 text-left">Уровень (Tier)</th>
+                    <th scope="col" class="px-6 py-3 text-left">Исходный спан</th>
+                  </tr>
+                </thead>
+                <tbody id="attributes-table" class="bg-white divide-y divide-gray-100">
+                  <!-- Динамические строки -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- JSON вкладка -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-bold text-gray-800">Финальный JSON ответа</span>
+              <button onclick="copyJson()" class="text-xs font-semibold text-mvideo-red hover:text-mvideo-darkred transition flex items-center">
+                <i class="fa-regular fa-copy mr-1"></i> Скопировать
+              </button>
+            </div>
+            <pre id="json-viewer" class="bg-gray-900 text-gray-100 p-4 rounded-xl text-xs overflow-x-auto font-mono max-h-60"></pre>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <footer class="bg-white border-t border-gray-200 py-4 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
+      Хакатон VolgaDev 2026 · Кейс М.Видео: «ИИ для автоматического заполнения характеристик товаров»
+    </div>
+  </footer>
+
+  <script>
+    const PRESETS = {
+      iphone: {
+        title: "Смартфон Apple iPhone 15 Pro Max 256GB Black Titanium",
+        desc: "Флагман с титановым корпусом на чипе Apple A17 Pro. Экран 6.7 дюймов 120 Гц, батарея емкостью 4422 мАч. Цвет: черный титан."
+      },
+      redmibook: {
+        title: "Ноутбук Xiaomi RedmiBook 16 ГБ ОЗУ 512 ГБ SSD",
+        desc: "Процессор Intel Core i5-12450H, экран 15.6 дюйма, 120 Гц, разрешение 1920x1080."
+      },
+      sony: {
+        title: "Наушники беспроводные Sony WH-1000XM5",
+        desc: "Чёрные, с активным интеллектуальным шумоподавлением."
+      }
+    };
+
+    function setPreset(key) {
+      const p = PRESETS[key];
+      if (p) {
+        document.getElementById('title').value = p.title;
+        document.getElementById('description').value = p.desc;
+      }
+    }
+
+    async function handleExtract(e) {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const desc = document.getElementById('description').value.trim();
+      const btn = document.getElementById('submit-btn');
+
+      if (!title) return;
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Извлечение...</span>`;
+
+      try {
+        const response = await fetch('/api/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            description: desc,
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Ошибка сервера: ' + response.statusText);
+        }
+
+        const data = await response.json();
+        renderResults(data);
+      } catch (err) {
+        alert('Ошибка при обработке: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i><span>Извлечь характеристики</span>`;
+      }
+    }
+
+    function renderResults(data) {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('results-card').classList.remove('hidden');
+
+      const conf = Math.round((data.overall_confidence || 0) * 100);
+      document.getElementById('confidence-value').innerText = conf + '%';
+      
+      const bar = document.getElementById('confidence-bar');
+      bar.style.width = conf + '%';
+      bar.className = 'h-2.5 rounded-full transition-all duration-500 ' + 
+        (conf >= 75 ? 'bg-green-500' : (conf >= 50 ? 'bg-yellow-500' : 'bg-red-500'));
+
+      const statusBadge = document.getElementById('status-badge');
+      if (data.needs_review) {
+        statusBadge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200';
+        statusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Требует проверки (HITL)`;
+      } else {
+        statusBadge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200';
+        statusBadge.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5"></i> Опубликовано в каталог`;
+      }
+
+      // Пропущенные поля
+      const missingTags = document.getElementById('missing-tags');
+      if (data.missing && data.missing.length > 0) {
+        missingTags.innerHTML = data.missing.map(m => `<span class="bg-gray-100 px-2 py-0.5 rounded text-gray-700 mr-1">${m}</span>`).join('');
+      } else {
+        missingTags.innerHTML = `<span class="text-green-600 font-bold">Все обязательные поля закрыты (100%)</span>`;
+      }
+
+      // Таблица
+      const table = document.getElementById('attributes-table');
+      table.innerHTML = '';
+      const preds = data.predictions || [];
+      document.getElementById('attr-count').innerText = preds.length;
+
+      preds.forEach(p => {
+        const confScore = Math.round(p.confidence * 100);
+        let confColor = 'bg-green-100 text-green-800';
+        if (confScore < 70) confColor = 'bg-red-100 text-red-800';
+        else if (confScore < 85) confColor = 'bg-yellow-100 text-yellow-800';
+
+        let sourceLabel = p.source;
+        let sourceClass = 'bg-gray-100 text-gray-700';
+        if (p.source === 'regex' || p.source === 'flashtext') {
+          sourceLabel = 'Tier 1: Правила';
+          sourceClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+        } else if (p.source === 'gliner') {
+          sourceLabel = 'Tier 2: GLiNER';
+          sourceClass = 'bg-purple-50 text-purple-700 border border-purple-200';
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50 transition';
+        tr.innerHTML = `
+          <td class="px-6 py-3.5 font-bold text-gray-900">${p.attribute}</td>
+          <td class="px-6 py-3.5 font-semibold text-gray-800">${p.value}</td>
+          <td class="px-6 py-3.5 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-extrabold ${confColor}">
+              ${confScore}%
+            </span>
+          </td>
+          <td class="px-6 py-3.5">
+            <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold ${sourceClass}">
+              ${sourceLabel}
+            </span>
+          </td>
+          <td class="px-6 py-3.5 text-gray-500 italic text-xs font-mono">${p.raw || '—'}</td>
+        `;
+        table.appendChild(tr);
+      });
+
+      // JSON
+      document.getElementById('json-viewer').innerText = JSON.stringify(data, null, 2);
+    }
+
+    function copyJson() {
+      const text = document.getElementById('json-viewer').innerText;
+      navigator.clipboard.writeText(text);
+      alert('JSON скопирован в буфер обмена!');
+    }
+  </script>
+</body>
+</html>
