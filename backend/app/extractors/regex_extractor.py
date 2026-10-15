@@ -185,9 +185,10 @@ class RegexExtractor:
         for m in self._ROM_RE.finditer(text):
             if ram_span and self._overlaps(m.span(), ram_span):
                 continue
-            # отсеиваем мусор: если слева от числа идёт "озу"/"ram" — это не ROM
-            prefix = text[max(0, m.start() - 20):m.start()].lower()
-            if "озу" in prefix or "ram" in prefix or "оператив" in prefix:
+            # отсеиваем мусор: если непосредственно перед числом идёт "озу"/"ram"
+            prefix_start = max(ram_span[1] if ram_span and m.start() >= ram_span[1] else 0, m.start() - 10)
+            prefix = text[prefix_start:m.start()].lower()
+            if re.search(r"\b(?:озу|ram|оперативн\w*)\s*[:=]?\s*$", prefix):
                 continue
             yield Prediction(
                 attribute="memory_rom",

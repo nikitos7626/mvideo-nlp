@@ -6,21 +6,13 @@ import json
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from app.extractors.regex_extractor import RegexExtractor
+from app.services.pipeline import CascadedExtractionPipeline
 
 
 router = APIRouter(prefix="/api/extract", tags=["extract"])
 
-# FlashText-процессор строится один раз при импорте модуля —
-# дальше работает как синглтон, на каждый запрос ничего не собирается.
-_extractor = RegexExtractor()
-
-# Обязательные поля, которые хотим видеть в каждой карточке.
-# Отсюда считаем "missing" — что не удалось закрыть регулярками.
-REQUIRED_ATTRS: set[str] = {
-    "brand", "model", "memory_rom",
-    "screen_diagonal", "battery", "color",
-}
+# Каскадный пайплайн (Tier 1 FastRules + Tier 2 GLiNER Zero-Shot + HITL)
+_pipeline = CascadedExtractionPipeline(use_gliner=True)
 
 
 # --------------------------- схемы ---------------------------
@@ -46,6 +38,8 @@ class CardOut(BaseModel):
     category: str | None
     predictions: list[PredictionOut]
     missing: list[str]
+    overall_confidence: float = 0.0
+    needs_review: bool = False
 
 
 class BatchOut(BaseModel):
@@ -56,18 +50,21 @@ class BatchOut(BaseModel):
 # --------------------------- хелперы ---------------------------
 
 def _run(card: CardIn) -> CardOut:
-    """Прогоняет одну карточку через Tier 1 и упаковывает в CardOut."""
-    raw_preds = _extractor.extract({
+    """Прогоняет одну карточку через каскадный пайплайн и упаковывает в CardOut."""
+    res = _pipeline.process_card({
+        "external_id": card.external_id,
+        "category": card.category,
         "title": card.title,
         "description": card.description,
         "seller_attributes": card.seller_attributes,
     })
-    found = {p["attribute"] for p in raw_preds}
     return CardOut(
-        external_id=card.external_id,
-        category=card.category,
-        predictions=[PredictionOut(**p) for p in raw_preds],
-        missing=sorted(REQUIRED_ATTRS - found),
+        external_id=res["external_id"],
+        category=res["category"],
+        predictions=[PredictionOut(**p) for p in res["predictions"]],
+        missing=res["missing"],
+        overall_confidence=res["overall_confidence"],
+        needs_review=res["needs_review"],
     )
 
 
@@ -104,11 +101,12 @@ def _rows_from_file(filename: str, raw: bytes) -> list[dict]:
 
 @router.get("/health")
 def health() -> dict:
-    """Быстрая проверка: extractor поднят, версия видна."""
+    """Быстрая проверка состояния экстракторов и пайплайна."""
     return {
         "ok": True,
-        "extractor": _extractor.name,
-        "version": _extractor.version,
+        "pipeline": "CascadedExtractionPipeline",
+        "tier1_regex": _pipeline.regex_extractor.health(),
+        "tier2_gliner": _pipeline.gliner_extractor.health() if _pipeline.gliner_extractor else False,
     }
 
 
