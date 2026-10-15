@@ -1,12 +1,48 @@
 # mvideo-nlp
-AI for automatic product attribute extraction and normalization (M.Video Hackathon)
 
+ИИ для автоматического заполнения и нормализации характеристик товаров (Хакатон М.Видео VolgaDev 2026).
 
-backend/scripts/demo_regex.py  # тесты небольшие. 
+---
 
-###  
-backend/tests  # тоже тесты. 
-###
+## 🚀 Быстрый запуск
 
+### Вариант 1: Запуск всего приложения в Docker (одной командой)
 
-backend/app/extractors/regex_extractor.py   # основной файл для регулярки. (завтра сделаю => появились атрибуты настоящие)
+```bash
+docker compose up --build
+```
+
+После запуска:
+* **API Swagger / Документация:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Эндпоинт извлечения:** `POST http://localhost:8000/api/extract`
+* **Проверка состояния:** `GET http://localhost:8000/api/extract/health`
+
+---
+
+### Вариант 2: Локальный интерактивный режим (в терминале)
+
+Позволяет ввести или вставить любой текст карточки и мгновенно увидеть результат в виде цветной таблицы и JSON:
+
+```bash
+python interactive.py
+```
+
+---
+
+### Вариант 3: Запуск юнит-тестов
+
+```bash
+cd backend
+python -m pytest
+```
+
+---
+
+## 🏗 Архитектура решения
+
+Решение построено по принципу **каскадного пайплайна (Cascaded Extraction)**:
+
+1. **Tier 1 (Fast Rules):** `FlashText` + `Regex` снимают бренды, цвета и числовые параметры (память, экран, аккумулятор, частота) за < 1 мс.
+2. **Tier 2 (Zero-Shot NER):** `GLiNER` (`urchade/gliner_multi-v2.1`) закрывает пропуски: модель/серия, процессор/чипсет, редкие бренды.
+3. **AttributeTypeValidator:** защита от галлюцинаций и путаницы единиц измерения.
+4. **Human-in-the-Loop (HITL):** автоматический расчет Confidence Score и флага `needs_review` для сомнительных карточек.
