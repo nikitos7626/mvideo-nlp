@@ -103,21 +103,49 @@
             </div>
           </div>
 
+          <!-- Переключатель режима ввода -->
+          <div class="flex items-center p-1 bg-gray-100 rounded-xl mb-4 text-xs font-semibold">
+            <button type="button" id="tab-split" onclick="switchMode('split')" class="flex-1 py-2 px-3 rounded-lg bg-white text-gray-800 shadow-sm transition flex items-center justify-center space-x-1.5">
+              <i class="fa-solid fa-table-columns"></i>
+              <span>Раздельные поля</span>
+            </button>
+            <button type="button" id="tab-raw" onclick="switchMode('raw')" class="flex-1 py-2 px-3 rounded-lg text-gray-500 hover:text-gray-800 transition flex items-center justify-center space-x-1.5">
+              <i class="fa-solid fa-align-left"></i>
+              <span>Сплошной текст (Raw)</span>
+            </button>
+          </div>
+
           <form id="extract-form" onsubmit="handleExtract(event)" class="space-y-4">
-            <div>
-              <label for="title" class="block text-sm font-semibold text-gray-700 mb-1">
-                Название товара (Title) <span class="text-red-500">*</span>
-              </label>
-              <textarea id="title" rows="2" required placeholder="Например: Смартфон Apple iPhone 15 Pro Max 256GB Black Titanium"
-                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+            
+            <!-- Режим: Раздельные поля -->
+            <div id="split-fields" class="space-y-4">
+              <div>
+                <label for="title" class="block text-sm font-semibold text-gray-700 mb-1">
+                  Название товара (Title) <span class="text-red-500">*</span>
+                </label>
+                <textarea id="title" rows="3" required placeholder="Например: Смартфон Apple iPhone 15 Pro Max 256GB Black Titanium"
+                  class="w-full min-h-[85px] px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+              </div>
+
+              <div>
+                <label for="description" class="block text-sm font-semibold text-gray-700 mb-1">
+                  Описание товара (Description)
+                </label>
+                <textarea id="description" rows="7" placeholder="Например: Флагманский процессор Apple A17 Pro. Диагональ экрана 6.7 дюймов OLED Retina 120 Гц. Батарея емкостью 4422 мАч."
+                  class="w-full min-h-[170px] px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+              </div>
             </div>
 
-            <div>
-              <label for="description" class="block text-sm font-semibold text-gray-700 mb-1">
-                Описание товара (Description)
+            <!-- Режим: Сплошной сырой текст -->
+            <div id="raw-field" class="hidden space-y-2">
+              <label for="raw_text" class="block text-sm font-semibold text-gray-700">
+                Сплошной текст карточки целиком <span class="text-red-500">*</span>
               </label>
-              <textarea id="description" rows="4" placeholder="Например: Флагманский процессор Apple A17 Pro. Диагональ экрана 6.7 дюймов OLED Retina 120 Гц. Батарея емкостью 4422 мАч."
-                class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+              <textarea id="raw_text" rows="11" placeholder="Вставьте сюда любой текст карточки целиком (заголовок + описание + характеристики из каталога). Пайплайн автоматически проведет сегментацию, определит категорию и заполнит фильтры."
+                class="w-full min-h-[270px] px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-mvideo-red focus:border-mvideo-red transition text-sm"></textarea>
+              <p class="text-[11px] text-gray-500">
+                💡 <span class="font-medium text-gray-700">Smart-сегментация:</span> Пайплайн сам отделит заголовок от описания и извлечет атрибуты без потери точности.
+              </p>
             </div>
 
             <button type="submit" id="submit-btn"
@@ -150,9 +178,18 @@
           <!-- Сводка и статус карточки -->
           <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-              <div>
-                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Статус публикации</span>
-                <div id="status-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"></div>
+              <div class="flex flex-wrap items-center gap-3">
+                <div>
+                  <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Статус публикации</span>
+                  <div id="status-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"></div>
+                </div>
+                <div class="pl-3 sm:border-l border-gray-200">
+                  <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Категория</span>
+                  <div id="category-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <i class="fa-solid fa-tag mr-1.5"></i>
+                    <span id="category-name">Категория</span>
+                  </div>
+                </div>
               </div>
               <div class="text-right">
                 <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Общая уверенность</span>
@@ -259,21 +296,69 @@
       }
     };
 
+    let currentMode = 'split';
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabSplit = document.getElementById('tab-split');
+      const tabRaw = document.getElementById('tab-raw');
+      const splitFields = document.getElementById('split-fields');
+      const rawField = document.getElementById('raw-field');
+      const titleInput = document.getElementById('title');
+      const descInput = document.getElementById('description');
+      const rawInput = document.getElementById('raw_text');
+
+      if (mode === 'raw') {
+        tabRaw.className = 'flex-1 py-2 px-3 rounded-lg bg-white text-gray-800 shadow-sm transition flex items-center justify-center space-x-1.5';
+        tabSplit.className = 'flex-1 py-2 px-3 rounded-lg text-gray-500 hover:text-gray-800 transition flex items-center justify-center space-x-1.5';
+        splitFields.classList.add('hidden');
+        rawField.classList.remove('hidden');
+        titleInput.removeAttribute('required');
+        rawInput.setAttribute('required', 'required');
+
+        if (!rawInput.value.trim() && (titleInput.value.trim() || descInput.value.trim())) {
+          rawInput.value = (titleInput.value.trim() + '\n\n' + descInput.value.trim()).trim();
+        }
+      } else {
+        tabSplit.className = 'flex-1 py-2 px-3 rounded-lg bg-white text-gray-800 shadow-sm transition flex items-center justify-center space-x-1.5';
+        tabRaw.className = 'flex-1 py-2 px-3 rounded-lg text-gray-500 hover:text-gray-800 transition flex items-center justify-center space-x-1.5';
+        rawField.classList.add('hidden');
+        splitFields.classList.remove('hidden');
+        rawInput.removeAttribute('required');
+        titleInput.setAttribute('required', 'required');
+
+        if (rawInput.value.trim() && !titleInput.value.trim()) {
+          const lines = rawInput.value.trim().split('\n');
+          titleInput.value = lines[0];
+          descInput.value = lines.slice(1).join('\n').trim();
+        }
+      }
+    }
+
     function setPreset(key) {
       const p = PRESETS[key];
       if (p) {
         document.getElementById('title').value = p.title;
         document.getElementById('description').value = p.desc;
+        document.getElementById('raw_text').value = p.title + '\n\n' + p.desc;
       }
     }
 
     async function handleExtract(e) {
       e.preventDefault();
-      const title = document.getElementById('title').value.trim();
-      const desc = document.getElementById('description').value.trim();
       const btn = document.getElementById('submit-btn');
-
-      if (!title) return;
+      
+      let payload = {};
+      if (currentMode === 'raw') {
+        const rawText = document.getElementById('raw_text').value.trim();
+        if (!rawText) return;
+        payload = { raw_text: rawText };
+      } else {
+        const title = document.getElementById('title').value.trim();
+        const desc = document.getElementById('description').value.trim();
+        if (!title && !desc) return;
+        payload = { title: title, description: desc };
+      }
 
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Извлечение...</span>`;
@@ -282,10 +367,7 @@
         const response = await fetch('/api/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title,
-            description: desc,
-          })
+          body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
@@ -305,6 +387,12 @@
     function renderResults(data) {
       document.getElementById('empty-state').classList.add('hidden');
       document.getElementById('results-card').classList.remove('hidden');
+
+      // Категория
+      const catBadge = document.getElementById('category-name');
+      if (catBadge) {
+        catBadge.innerText = data.category || 'Электроника';
+      }
 
       const conf = Math.round((data.overall_confidence || 0) * 100);
       document.getElementById('confidence-value').innerText = conf + '%';

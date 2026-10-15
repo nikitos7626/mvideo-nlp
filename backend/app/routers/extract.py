@@ -22,6 +22,7 @@ class CardIn(BaseModel):
     category: str | None = None
     title: str = ""
     description: str = ""
+    raw_text: str | None = None
     seller_attributes: dict = Field(default_factory=dict)
 
 
@@ -56,6 +57,7 @@ def _run(card: CardIn) -> CardOut:
         "category": card.category,
         "title": card.title,
         "description": card.description,
+        "raw_text": card.raw_text,
         "seller_attributes": card.seller_attributes,
     })
     return CardOut(

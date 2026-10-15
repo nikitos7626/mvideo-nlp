@@ -116,13 +116,43 @@ class CascadedExtractionPipeline:
         """
         Сквозной прогон карточки через 4-этапную воронку.
         """
+        # Интеллектуальное авто-разделение сплошного текста (когда карточка введена единым куском)
+        card = dict(card)
+        raw_text = (card.get("raw_text") or "").strip()
+        raw_title = (card.get("title") or "").strip()
+        raw_desc = (card.get("description") or "").strip()
+
+        if raw_text and not raw_title:
+            lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+            if len(lines) > 1:
+                card["title"] = lines[0]
+                card["description"] = " ".join(lines[1:])
+            else:
+                parts = re.split(r"(?<=[.!?])\s+", raw_text, 1)
+                if len(parts) == 2 and len(parts[0]) < 120:
+                    card["title"] = parts[0]
+                    card["description"] = parts[1]
+                else:
+                    card["title"] = raw_text
+                    card["description"] = ""
+        elif raw_title and not raw_desc and (len(raw_title) > 100 or "\n" in raw_title):
+            lines = [line.strip() for line in raw_title.split("\n") if line.strip()]
+            if len(lines) > 1:
+                card["title"] = lines[0]
+                card["description"] = " ".join(lines[1:])
+            else:
+                parts = re.split(r"(?<=[.!?])\s+", raw_title, 1)
+                if len(parts) == 2 and len(parts[0]) < 120:
+                    card["title"] = parts[0]
+                    card["description"] = parts[1]
+
         # ------------------------------------------------------------------
         # ЭТАП 1: Определение категории товара
         # ------------------------------------------------------------------
         cat_key, cat_name = self.detect_category(card)
         schema = CATEGORY_SCHEMAS.get(cat_key, CATEGORY_SCHEMAS["default"])
-        required_attrs: set[str] = schema["required_attrs"]
         gliner_labels: list[str] = schema["gliner_labels"]
+        required_attrs: set[str] = schema["required_attrs"]
 
         predictions_map: dict[str, Prediction] = {}
 

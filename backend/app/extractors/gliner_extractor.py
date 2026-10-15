@@ -53,10 +53,28 @@ class AttributeTypeValidator:
             return len(val_lower) >= 3
 
         if attr_name == "model":
-            # Модель не должна быть одиночным общим словом вроде "смартфон" или "телефон"
-            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "наушники", "беспроводные", "пылесос", "робот-пылесос", "холодильник"}:
+            # Модель не должна быть одиночным общим словом или описанием процессора/памяти/батареи
+            bad_model_words = {
+                "смартфон", "телефон", "ноутбук", "планшет", "телевизор",
+                "наушники", "беспроводные", "пылесос", "робот-пылесос",
+                "холодильник", "процессор", "ядерный", "аккумулятор", "батарея",
+                "пикселей", "разрешение", "память", "оперативной",
+            }
+            if any(w in val_lower for w in bad_model_words):
                 return False
             return len(val_lower) >= 2
+
+        if attr_name == "cpu":
+            # Процессор не может быть общим названием категории или устройства
+            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "экран", "дисплей", "камера", "аккумулятор", "батарея"}:
+                return False
+            known_chips = {
+                "intel", "core", "ryzen", "amd", "mediatek", "helio", "dimensity",
+                "snapdragon", "qualcomm", "apple", "bionic", "exynos", "m1", "m2",
+                "m3", "m4", "a14", "a15", "a16", "a17", "a18", "kirin", "tensor",
+                "celeron", "pentium", "geforce", "radeon"
+            }
+            return any(c in val_lower for c in known_chips) or bool(re.search(r"[a-zA-Z]", val_lower))
 
         if attr_name == "cleaning_type":
             return any(k in val_lower for k in ["сух", "влажн", "комбинир"])
@@ -170,7 +188,10 @@ class GlinerExtractor:
 
         # Пасс 1: Заголовок (Title) — здесь самая чистая модель и бренд
         if title:
-            t_labels = target_labels or self.TITLE_LABELS
+            # Для заголовка берем только релевантные заголовку метки (бренд, модель, цвет)
+            t_labels = [lbl for lbl in (target_labels or self.TITLE_LABELS) if lbl in self.TITLE_LABELS]
+            if not t_labels:
+                t_labels = self.TITLE_LABELS
             title_entities = model.predict_entities(title, t_labels, threshold=self.threshold)
             for ent in sorted(title_entities, key=lambda x: float(x.get("score", 0.0)), reverse=True):
                 pred = self._entity_to_prediction(ent, is_title=True)
