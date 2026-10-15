@@ -13,9 +13,10 @@ docker compose up --build
 ```
 
 После запуска:
+* **Интерактивный Web UI (демо с пресетами М.Видео):** [http://localhost:8000](http://localhost:8000)
 * **API Swagger / Документация:** [http://localhost:8000/docs](http://localhost:8000/docs)
 * **Эндпоинт извлечения:** `POST http://localhost:8000/api/extract`
-* **Проверка состояния:** `GET http://localhost:8000/api/extract/health`
+* **Проверка состояния:** `GET http://localhost:8000/health`
 
 ---
 
@@ -29,10 +30,9 @@ python interactive.py
 
 ---
 
-### Вариант 3: Запуск юнит-тестов
+### Вариант 3: Запуск тестов
 
 ```bash
-cd backend
 python -m pytest
 ```
 
@@ -40,9 +40,10 @@ python -m pytest
 
 ## 🏗 Архитектура решения
 
-Решение построено по принципу **каскадного пайплайна (Cascaded Extraction)**:
+Решение построено по принципу **4-этапного каскадного пайплайна (Cascaded Extraction)**:
 
-1. **Tier 1 (Fast Rules):** `FlashText` + `Regex` снимают бренды, цвета и числовые параметры (память, экран, аккумулятор, частота) за < 1 мс.
-2. **Tier 2 (Zero-Shot NER):** `GLiNER` (`urchade/gliner_multi-v2.1`) закрывает пропуски: модель/серия, процессор/чипсет, редкие бренды.
-3. **AttributeTypeValidator:** защита от галлюцинаций и путаницы единиц измерения.
-4. **Human-in-the-Loop (HITL):** автоматический расчет Confidence Score и флага `needs_review` для сомнительных карточек.
+1. **Этап 1 (Category Detector):** автоматическое определение товарной категории и выбор схемы обязательных фильтров (`CATEGORY_SCHEMAS`).
+2. **Tier 1 (Fast Rules):** `FlashText` + `Regex` закрывают бренды, цвета и числовые параметры (память, экран, аккумулятор, частота) за < 1 мс.
+3. **Tier 2 (Zero-Shot NER):** `GLiNER` (`urchade/gliner_multi-v2.1`) закрывает сложные сущности: модель/серия, процессор/чипсет, редкие бренды, тип уборки, система разморозки.
+4. **AttributeTypeValidator:** строгая защита от галлюцинаций (белый список дисплеев, валидаторы моделей/чипов).
+5. **Human-in-the-Loop (HITL):** автоматический расчет Confidence Score и флага `needs_review` для сомнительных карточек при падении уверенности ниже 75%.
