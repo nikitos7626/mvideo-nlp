@@ -64,7 +64,31 @@ class AttributeTypeValidator:
         if attr_name == "defrost_system":
             return any(k in val_lower for k in ["no frost", "ноу фрост", "капельн", "ручн", "автомат"])
 
+        if attr_name == "display_tech":
+            # Белый список матриц дисплея (HLG, HDR10 и звук строго отсекаются)
+            return any(k in val_lower for k in AttributeTypeValidator.ALLOWED_DISPLAY_TECHS)
+
         return True
+
+    ALLOWED_DISPLAY_TECHS: dict[str, str] = {
+        "triluminos": "Triluminos",
+        "oled": "OLED",
+        "олед": "OLED",
+        "amoled": "AMOLED",
+        "super amoled": "Super AMOLED",
+        "superamoled": "Super AMOLED",
+        "qled": "QLED",
+        "клед": "QLED",
+        "neo qled": "Neo QLED",
+        "ips": "IPS",
+        "ипс": "IPS",
+        "va": "VA",
+        "tn": "TN",
+        "nanocell": "NanoCell",
+        "mini led": "Mini-LED",
+        "mini-led": "Mini-LED",
+        "retina": "Retina",
+    }
 
 
 class GlinerExtractor:
@@ -263,6 +287,12 @@ class GlinerExtractor:
         if attr_key == "defrost_system":
             if "no frost" in low or "ноу фрост" in low:
                 return "No Frost"
+            return raw_clean
+
+        if attr_key == "display_tech":
+            for k, canon in AttributeTypeValidator.ALLOWED_DISPLAY_TECHS.items():
+                if k in low:
+                    return canon
             return raw_clean
 
         return raw_clean
