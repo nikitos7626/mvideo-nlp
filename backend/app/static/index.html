@@ -75,18 +75,30 @@
             <span class="text-xs text-gray-500">Только текст</span>
           </div>
 
-          <!-- Быстрые пресеты -->
+          <!-- Быстрые пресеты из реального датасета М.Видео -->
           <div class="mb-5">
-            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Быстрые примеры:</label>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Товары из датасета М.Видео:</label>
+              <span class="text-[11px] text-mvideo-red font-medium">sku_desc.parquet</span>
+            </div>
             <div class="flex flex-wrap gap-2">
-              <button onclick="setPreset('iphone')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
-                📱 iPhone 15 Pro
+              <button type="button" onclick="setPreset('samsung')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                📱 Samsung A32
               </button>
-              <button onclick="setPreset('redmibook')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
-                💻 RedmiBook 16
+              <button type="button" onclick="setPreset('lenovo')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                💻 Lenovo IdeaPad
               </button>
-              <button onclick="setPreset('sony')" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition">
-                🎧 Наушники Sony
+              <button type="button" onclick="setPreset('sony_tv')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                📺 Sony 50" 4K
+              </button>
+              <button type="button" onclick="setPreset('vacuum')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                🤖 Пылесос Mi
+              </button>
+              <button type="button" onclick="setPreset('fridge')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                ❄️ Холодильник AEG
+              </button>
+              <button type="button" onclick="setPreset('iphone16')" class="px-2.5 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-red-50 hover:text-mvideo-red rounded-lg text-gray-700 border border-gray-200 transition">
+                🍏 iPhone 16 Plus
               </button>
             </div>
           </div>
@@ -221,17 +233,29 @@
 
   <script>
     const PRESETS = {
-      iphone: {
-        title: "Смартфон Apple iPhone 15 Pro Max 256GB Black Titanium",
-        desc: "Флагман с титановым корпусом на чипе Apple A17 Pro. Экран 6.7 дюймов 120 Гц, батарея емкостью 4422 мАч. Цвет: черный титан."
+      samsung: {
+        title: "Смартфон Samsung Galaxy A32 6/128Gb White",
+        desc: "Смартфон Samsung Galaxy A32 White обладает безрамочным 6,4-дюймовым дисплеем разрешением 1080х2400 пикселей, который создан по технологии SuperAMOLED. В основе девайса лежит восьмиядерный процессор MediaTek, который работает при поддержке оперативной памяти объемом 6 Гб. Объем встроенной памяти равен 128 Гб. Корпус выполнен из пластика. Аккумулятор емкостью 5000 мА*ч поддерживает быструю зарядку. Вес модели равен 184 г."
       },
-      redmibook: {
-        title: "Ноутбук Xiaomi RedmiBook 16 ГБ ОЗУ 512 ГБ SSD",
-        desc: "Процессор Intel Core i5-12450H, экран 15.6 дюйма, 120 Гц, разрешение 1920x1080."
+      lenovo: {
+        title: "Ноутбук Lenovo IdeaPad 3 Gen7 82RK003TRU",
+        desc: "Ноутбук Lenovo IdeaPad 3 Gen7 82RK003TRU оборудован шестиядерным процессором Intel Core i3 1215U 1.2 ГГц. Конфигурацией устройства предусмотрено наличие экрана разрешением 1920х1080 пикселей и диагональю 15,6\". Частота обновления экрана составляет 60 Гц. Оперативный модуль для хранения данных обладает объемом 8 ГБ, объем жесткого диска — 512 ГБ."
       },
-      sony: {
-        title: "Наушники беспроводные Sony WH-1000XM5",
-        desc: "Чёрные, с активным интеллектуальным шумоподавлением."
+      sony_tv: {
+        title: "Телевизор Sony KD50X85TJ",
+        desc: "Sony KD50X8TJ — телевизор с экраном, созданным на основе матрицы Triluminos Pro. Его диагональ — 50 дюймов, разрешение — 3840 х 2160 пикселей. Фирменный процессор X1 обеспечивает масштабирование изображения до 4K Ultra HD. В модели реализованы технологии HDR10, HLG и X-Reality Pro 1000. Мощность фронтальных динамиков — 20 Вт."
+      },
+      vacuum: {
+        title: "Робот-пылесос Mi Robot Vacuum-Mop P White (SKV4110GL)",
+        desc: "Робот-пылесос Mi Robot Vacuum-Mop P справится с сухой и влажной уборкой совершенно без вашего участия. Цвет корпуса: белый. Модель оснащена 11 датчиками определения препятствий. Емкий аккумулятор обеспечивает до 1 часа 50 минут непрерывной работы."
+      },
+      fridge: {
+        title: "Холодильник AEG RCR736E5MB",
+        desc: "Холодильник AEG RCR736E5MB оснащен зоной свежести объемом 22 л. Морозильная камера с тремя ящиками не требует разморозки (No Frost). Сенсорный дисплей отображает режим работы и температуру. Мощность замораживания составляет 8 кг в сутки. Цвет: черный металлик."
+      },
+      iphone16: {
+        title: "Смартфон Apple iPhone 16 Plus 128GB Pink (SIM + eSIM)",
+        desc: "Смартфон Apple iPhone 16 Plus 128GB Pink с диагональю 6.7 дюймов OLED Super Retina XDR 60 Гц, чип Apple A18. Емкость аккумулятора 4674 мАч. Цвет: розовый."
       }
     };
 
