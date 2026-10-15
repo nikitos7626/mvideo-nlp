@@ -54,9 +54,15 @@ class AttributeTypeValidator:
 
         if attr_name == "model":
             # Модель не должна быть одиночным общим словом вроде "смартфон" или "телефон"
-            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "наушники", "беспроводные"}:
+            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "наушники", "беспроводные", "пылесос", "робот-пылесос", "холодильник"}:
                 return False
             return len(val_lower) >= 2
+
+        if attr_name == "cleaning_type":
+            return any(k in val_lower for k in ["сух", "влажн", "комбинир"])
+
+        if attr_name == "defrost_system":
+            return any(k in val_lower for k in ["no frost", "ноу фрост", "капельн", "ручн", "автомат"])
 
         return True
 
@@ -92,6 +98,11 @@ class GlinerExtractor:
         "ёмкость аккумулятора": "battery",
         "частота обновления экрана": "refresh_rate",
         "разрешение экрана": "resolution",
+        "тип уборки": "cleaning_type",
+        "время работы": "working_time",
+        "система разморозки": "defrost_system",
+        "технология экрана": "display_tech",
+        "объем": "volume",
     }
 
     _NUM_UNIT_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*([a-zA-Zа-яА-ЯёЁ\"']*)")
@@ -238,6 +249,20 @@ class GlinerExtractor:
                     return self._units.resolution(m.group(1), m.group(2))
                 except Exception:
                     pass
+            return raw_clean
+
+        if attr_key == "cleaning_type":
+            if "сух" in low and "влажн" in low:
+                return "сухая и влажная"
+            if "влажн" in low:
+                return "влажная"
+            if "сух" in low:
+                return "сухая"
+            return raw_clean
+
+        if attr_key == "defrost_system":
+            if "no frost" in low or "ноу фрост" in low:
+                return "No Frost"
             return raw_clean
 
         return raw_clean

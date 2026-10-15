@@ -11,6 +11,7 @@ BRANDS: dict[str, str] = {
     "сяоми": "Xiaomi",
     "сяомi": "Xiaomi",
     "xiaomi": "Xiaomi",
+    "mi": "Xiaomi",
     "редми": "Xiaomi",       # Redmi — суббренд Xiaomi
     "redmi": "Xiaomi",
     "poco": "Xiaomi",
@@ -36,7 +37,15 @@ BRANDS: dict[str, str] = {
     "lg": "LG",
     "philips": "Philips",
     "bosch": "Bosch",
-    "lg": "LG",
+    "aeg": "AEG",
+    "аег": "AEG",
+    "dyson": "Dyson",
+    "дайсон": "Dyson",
+    "roborock": "Roborock",
+    "dreame": "Dreame",
+    "viomi": "Viomi",
+    "haier": "Haier",
+    "whirlpool": "Whirlpool",
 }
 
 # Цвета. Ключ — как встречается в тексте (в нижнем регистре),
