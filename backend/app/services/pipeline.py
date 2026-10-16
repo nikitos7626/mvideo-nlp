@@ -184,11 +184,25 @@ class CascadedExtractionPipeline:
         # ЭТАП 3: Tier 2 (GLiNER Zero-Shot NER) — таргетированно под категорию
         # ------------------------------------------------------------------
         if self.use_gliner and self.gliner_extractor and missing_attrs:
-            t2_preds = self.gliner_extractor.extract(card, target_labels=gliner_labels)
-            for p in t2_preds:
-                attr = p["attribute"]
-                if attr not in predictions_map or predictions_map[attr]["confidence"] < p["confidence"]:
-                    predictions_map[attr] = p
+            # Запрашиваем у GLiNER только те сущности, которых нет в Tier 1 или где уверенность < 0.85
+            needed_labels = [
+                lbl for lbl in gliner_labels
+                if (attr := self.gliner_extractor.LABEL_TO_ATTR.get(lbl)) is None
+                or attr not in predictions_map
+                or predictions_map[attr]["confidence"] < 0.85
+            ]
+            if needed_labels:
+                t2_preds = self.gliner_extractor.extract(card, target_labels=needed_labels)
+                for p in t2_preds:
+                    attr = p["attribute"]
+                    existing = predictions_map.get(attr)
+                    if existing is None:
+                        predictions_map[attr] = p
+                    elif existing.get("source") == "flashtext" and existing.get("confidence", 0) >= 0.80:
+                        # Словарный бренд/цвет из FlashText — эталонный детерминированный источник
+                        continue
+                    elif existing.get("confidence", 0) < p["confidence"]:
+                        predictions_map[attr] = p
 
         # ------------------------------------------------------------------
         # ЭТАП 4: Валидация полноты и расчет уверенности

@@ -131,7 +131,8 @@ class RegexExtractor:
         (re.compile(r"\bdimensity\s+\d+\b"), 0.85),
         (re.compile(r"\bexynos\s+\d+\b"), 0.93),
         (re.compile(r"\bkirin\s+\d+\b"), 0.93),
-        (re.compile(r"\b(?:apple\s+)?a\d{2}(?:\s*(?:pro|bionic|max))?\b"), 0.94),
+        (re.compile(r"\b(?:apple\s+|чип\s+|процессор\s+|chip\s+)a\d{1,2}(?:\s*(?:pro|bionic|max))?\b"), 0.95),
+        (re.compile(r"\ba\d{1,2}\s+(?:pro|bionic|max)\b"), 0.94),
         (re.compile(r"\bapple\s+m\d+(?:\s+(?:pro|max|ultra))?\b"), 0.95),
         (re.compile(r"\bm\d+\s+(?:pro|max|ultra)\b"), 0.88),
         (re.compile(r"\bintel\s+core\s+i[3579](?:-\d+\w*)?\b"), 0.95),
@@ -368,7 +369,7 @@ class RegexExtractor:
         if (m := self._SCREEN_RE.search(text)):
             try:
                 num = float(m.group(1).replace(",", "."))
-                if 3 <= num <= 25:
+                if 3 <= num <= 120:
                     yield Prediction(
                         attribute="screen_diagonal",
                         value=_u.screen_diagonal(m.group(1)),
@@ -490,6 +491,7 @@ class RegexExtractor:
 
     def _canon_cpu(self, raw: str) -> str:
         """'snapdragon 8 gen 3' → 'Snapdragon 8 Gen 3'."""
+        raw = re.sub(r"^(?:чип|процессор|chip)\s+", "", raw.strip(), flags=re.IGNORECASE)
         out: list[str] = []
         for tok in raw.split():
             low = tok.lower()

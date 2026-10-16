@@ -32,9 +32,15 @@ class AttributeTypeValidator:
 
         if attr_name == "battery":
             # Емкость аккумулятора не должна содержать дюймов, герц или памяти
-            if any(u in val_lower for u in ["гб", "gb", "тб", "дюйм", '"', "гц", "hz"]):
+            if any(u in val_lower for u in ["гб", "gb", "тб", "дюйм", '"', "гц", "hz", "ватт", "вт"]):
                 return False
-            return bool(re.search(r"\d{3,5}", val_lower))
+            m = re.search(r"\d{3,5}", val_lower)
+            if not m:
+                return False
+            val_int = int(m.group(0))
+            if val_int < 1000 and not any(u in val_lower for u in ["мач", "mah", "ач", "а·ч"]):
+                return False
+            return True
 
         if attr_name in ("memory_rom", "memory_ram"):
             if any(u in val_lower for u in ['"', "дюйм", "мач", "mah", "гц", "hz"]):
