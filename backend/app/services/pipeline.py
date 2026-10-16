@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 CATEGORY_SCHEMAS: dict[str, dict[str, Any]] = {
     "smartphones": {
         "name_ru": "Смартфоны",
-        "keywords": ["смартфон", "телефон", "iphone", "айфон", "galaxy", "redmi", "poco", "realme"],
+        "keywords": [
+            "смартфон", "телефон", "iphone", "айфон", "galaxy", "redmi", "poco",
+            "realme", "motorola", "моторола", "infinix", "инфиникс", "xperia",
+            "pixel", "пиксель", "oneplus", "oppo", "vivo", "honor", "хонор",
+            "huawei", "хуавей", "xiaomi", "сяоми", "samsung", "самсунг", "tecno", "текно",
+        ],
         "required_attrs": {"brand", "model", "memory_rom", "screen_diagonal", "battery", "color"},
         "gliner_labels": ["бренд", "модель", "объём памяти", "оперативная память", "диагональ экрана", "цвет", "процессор", "ёмкость аккумулятора"],
     },
@@ -29,7 +34,7 @@ CATEGORY_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "tvs": {
         "name_ru": "Телевизоры",
-        "keywords": ["телевизор", "тв", "smart tv", "triluminos", "oled", "qled"],
+        "keywords": ["телевизор", "smart tv", "led тв", "тв-панель", "телевизоры", "телевизора"],
         "required_attrs": {"brand", "model", "screen_diagonal", "resolution"},
         "gliner_labels": ["бренд", "модель", "диагональ экрана", "разрешение экрана", "технология экрана", "частота обновления экрана"],
     },
@@ -109,6 +114,12 @@ class CascadedExtractionPipeline:
                 # Словарное совпадение с границами слов или морфемой
                 if re.search(rf"\b{re.escape(kw)}", text_corpus):
                     return cat_key, schema["name_ru"]
+
+        # 2. Эвристика: экран <= 7.2" и аккумулятор mAh / мобильные паттерны -> Смартфоны
+        if re.search(r"\b(?:[56]\.\d{1,2}|7\.[012])\s*(?:\"|дюйм)", text_corpus) and re.search(r"\b\d{3,5}\s*(?:мач|mah|аккум)\b", text_corpus):
+            return "smartphones", CATEGORY_SCHEMAS["smartphones"]["name_ru"]
+        if re.search(r"\b\d{1,2}/\d{2,4}\s*(?:гб|gb)?\b", text_corpus) and re.search(r"\b\d{3,5}\s*(?:мач|mah)\b", text_corpus):
+            return "smartphones", CATEGORY_SCHEMAS["smartphones"]["name_ru"]
 
         return "default", CATEGORY_SCHEMAS["default"]["name_ru"]
 
@@ -193,10 +204,20 @@ class CascadedExtractionPipeline:
 
         # Карточка требует проверки человеком (Human-in-the-Loop), если:
         # 1. Средняя уверенность ниже порога (0.75)
-        # 2. Не удалось извлечь критически важные поля категории (бренд или модель)
-        # 3. Карточка пустая
-        critical_missing = bool({"brand", "model"} & set(final_missing))
-        needs_review = (avg_conf < self.confidence_threshold) or critical_missing or (len(all_preds) == 0)
+        # 2. Не удалось извлечь хотя бы одно обязательное поле категории (final_missing)
+        # 3. Хотя бы один обязательный атрибут имеет уверенность ниже 0.75 (критично для фильтров)
+        # 4. Карточка пустая
+        low_conf_required = any(
+            p["confidence"] < self.confidence_threshold
+            for p in all_preds
+            if p["attribute"] in required_attrs
+        )
+        needs_review = (
+            (avg_conf < self.confidence_threshold)
+            or bool(final_missing)
+            or low_conf_required
+            or (len(all_preds) == 0)
+        )
 
         return {
             "external_id": card.get("external_id") or card.get("id"),

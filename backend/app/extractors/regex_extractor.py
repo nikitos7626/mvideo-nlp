@@ -44,11 +44,31 @@ class RegexExtractor:
         r"\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(тб|tb|гб|gb)\b"
     )
     _RAM_RE = re.compile(
-        r"(?:ram|озу|оперативн\w*\s+памят\w*)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(гб|gb)\b"
+        r"(?:ram|озу|оператив\w*(?:\s+памят\w*)?)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(гб|gb)\b"
     )
     _RAM_RE2 = re.compile(
-        r"(\d+(?:[.,]\d+)?)\s*(гб|gb)\s*(?:ram|озу|оперативной)\b"
+        r"(\d+(?:[.,]\d+)?)\s*(гб|gb)\s*(?:ram|озу|оператив\w*)\b"
     )
+    _SLASH_MEM_RE = re.compile(
+        r"(?<!\d)(\d{1,2})\s*/\s*(\d{2,4})\s*(?:гб|gb)?\b"
+    )
+    _MODEL_PATTERNS = [
+        re.compile(r"\b(iphone\s+(?:se|\d{1,2}(?:\s*(?:pro\s*max|pro|plus|mini))?))\b", re.IGNORECASE),
+        re.compile(r"\b(galaxy\s+[szanmfe]\d{1,2}[a-z]?(?:\s*(?:ultra|plus|\+|fe|pro|5g))?)\b", re.IGNORECASE),
+        re.compile(r"(?:samsung|самсунг)\s+([a-zа-я]\d{2}[a-zа-я]?(?:\s*(?:5g|5г|ultra|plus|fe))?)", re.IGNORECASE),
+        re.compile(r"\b(redmi(?:\s+note)?\s+\d{1,2}[a-z]?(?:\s*(?:pro\s*\+|pro|plus|\+|s|turbo))?)\b", re.IGNORECASE),
+        re.compile(r"\b(poco\s+[xfmc]\d{1,2}[a-z]?(?:\s*(?:pro|gt))?)\b", re.IGNORECASE),
+        re.compile(r"\b(gt\s+(?:neo\s*)?\d+[a-z]?(?:\s*(?:pro|ultra|explorer))?)\b", re.IGNORECASE),
+        re.compile(r"\b(edge\s+\d{1,2}[a-z]?(?:\s*(?:pro|plus|fusion|ultra|neo))?)\b", re.IGNORECASE),
+        re.compile(r"\b(xperia\s+(?:\d{1,2}|[ivx]+)(?:\s+[ivx\d]+)?(?:\s*(?:pro|plus))?)\b", re.IGNORECASE),
+        re.compile(r"\b(p\d{2}(?:\s*(?:pro\s*\+|pro|art|pocket))?)\b", re.IGNORECASE),
+        re.compile(r"\b(pura\s+\d{2}(?:\s*(?:pro\s*\+|pro|ultra))?)\b", re.IGNORECASE),
+        re.compile(r"\b(mate\s+\d{2}(?:\s*(?:pro\s*\+|pro|rs|x\d?))?)\b", re.IGNORECASE),
+        re.compile(r"\b(nova\s+\d{1,2}[a-z]?(?:\s*(?:pro|se|i|y))?)\b", re.IGNORECASE),
+        re.compile(r"\b((?:hot|нот|note|zero|smart|смарт)\s+\d{1,2}[a-z]?(?:\s*(?:pro|play|vip|plus|про|плюс))?)\b", re.IGNORECASE),
+        re.compile(r"\b(oneplus\s+(?:\d{1,2}[a-z]?|nord(?:\s+(?:ce|\d+|n\d+))?)(?:\s*(?:pro|r|open))?)\b", re.IGNORECASE),
+        re.compile(r"\b(pixel\s+\d{1,2}[a-z]?(?:\s*(?:pro(?:\s*xl)?|a))?)\b", re.IGNORECASE),
+    ]
     # Экран: 6.7", 6.7 дюйма, 6,7 ″, диагональ — 50 дюймов
     _SCREEN_RE = re.compile(
         r"(?:диагонал\w*|экран\w*)?\s*[:=\-—–]?\s*"
@@ -59,6 +79,12 @@ class RegexExtractor:
     _BATTERY_RE = re.compile(
         r"(?:батаре\w*|аккумулятор\w*|ёмкост\w*\s+батаре\w*)?\s*[:=\-—–]?\s*"
         r"(\d{3,6}(?:[.,]\d+)?)\s*(?:мА[·*.\-\s]?ч|mAh|mah)\b",
+        re.IGNORECASE,
+    )
+    # Батарея с контекстом без обязательной единицы: аккум 5000, батарея 5000, акб 5000
+    _BATTERY_CTX_RE = re.compile(
+        r"(?:батаре\w*|аккумулятор\w*|аккум\w*|акб|ёмкост\w*(?:\s+батаре\w*|\s+акб|\s+аккум\w*)?)\s*[:=\-—–]?\s*"
+        r"(\d{3,5})\s*(?:мА[·*.\-\s]?ч|mAh|mah)?\b",
         re.IGNORECASE,
     )
     _REFRESH_RE = re.compile(r"(\d{2,4})\s*(?:гц|hz)\b")
@@ -76,9 +102,9 @@ class RegexExtractor:
     _WEIGHT_KG_RE = re.compile(
         r"(?<!\d)(\d+(?:[.,]\d+)?)\s*(?:кг|kg|килограмм\w*)\b"
     )
-    # Вес без контекста — граммы (для наушников, мышей, мелких устройств)
+    # Вес без контекста — граммы (только явные обозначения граммов, защита от 5g/4g)
     _WEIGHT_G_RE = re.compile(
-        r"(?<!\d)(\d{1,4}(?:[.,]\d+)?)\s*(?:гр|грамм\w*|gr|г|g)\b"
+        r"(?<!\d)(?<![2-5])(\d{1,4}(?:[.,]\d+)?)\s*(?:гр|грамм\w*|gr|г)\b"
     )
 
     # Мощность: 1500 Вт, 1.5 кВт, 500w
@@ -100,11 +126,12 @@ class RegexExtractor:
     # CPU-паттерны: (regex, base_confidence). Идём по порядку,
     # берём первое совпадение. Специфичные — выше.
     _CPU_PATTERNS: list[tuple[re.Pattern[str], float]] = [
-        (re.compile(r"\bsnapdragon\s+\d+(?:\s+gen\s+\d+)?\b"), 0.94),
+        (re.compile(r"\bsnapdragon\s+\d+\+?(?:\s+gen\s+\d+)?(?:\s+(?:plus|\+|ultra|pro))?\b"), 0.94),
         (re.compile(r"\bmediatek\s+dimensity\s+\d+\b"), 0.94),
         (re.compile(r"\bdimensity\s+\d+\b"), 0.85),
         (re.compile(r"\bexynos\s+\d+\b"), 0.93),
         (re.compile(r"\bkirin\s+\d+\b"), 0.93),
+        (re.compile(r"\b(?:apple\s+)?a\d{2}(?:\s*(?:pro|bionic|max))?\b"), 0.94),
         (re.compile(r"\bapple\s+m\d+(?:\s+(?:pro|max|ultra))?\b"), 0.95),
         (re.compile(r"\bm\d+\s+(?:pro|max|ultra)\b"), 0.88),
         (re.compile(r"\bintel\s+core\s+i[3579](?:-\d+\w*)?\b"), 0.95),
@@ -127,6 +154,7 @@ class RegexExtractor:
         "ryzen": "Ryzen",
         "celeron": "Celeron",
         "pentium": "Pentium",
+        "bionic": "Bionic",
         "gen": "Gen",
         "pro": "Pro",
         "max": "Max",
@@ -207,6 +235,21 @@ class RegexExtractor:
             out.append(color)
             seen_attrs.add("color")
 
+        # Модель по известным флагманским паттернам
+        raw_title = card.get("title") or ""
+        for pat in self._MODEL_PATTERNS:
+            if (m := pat.search(raw_title)):
+                val = self._canon_model(m.group(1).strip())
+                out.append(Prediction(
+                    attribute="model",
+                    value=val,
+                    confidence=0.96,
+                    source="regex",
+                    raw=m.group(0).strip(),
+                ))
+                seen_attrs.add("model")
+                break
+
         for pred in self._find_numeric(full_text, title):
             if pred["attribute"] not in seen_attrs:
                 out.append(pred)
@@ -260,7 +303,33 @@ class RegexExtractor:
     # ================== Regex-хелперы ==================
 
     def _find_numeric(self, text: str, title: str) -> Iterable[Prediction]:
-        # --- RAM (перед ROM, чтобы «8 гб озу» не ушло в rom) ---
+        # --- Память через слэш (например, 8/256 или 12/512GB в названии или тексте) ---
+        slash_match = self._SLASH_MEM_RE.search(title) or self._SLASH_MEM_RE.search(text)
+        slash_ram = None
+        slash_rom = None
+        if slash_match:
+            try:
+                ram_val = int(slash_match.group(1))
+                rom_val = int(slash_match.group(2))
+                if ram_val in (3, 4, 6, 8, 12, 16, 24, 32, 64) and rom_val in (32, 64, 128, 256, 512, 1024, 2048):
+                    slash_ram = Prediction(
+                        attribute="memory_ram",
+                        value=_u.memory(str(ram_val), "ГБ"),
+                        confidence=0.95,
+                        source="regex",
+                        raw=slash_match.group(0).strip(),
+                    )
+                    slash_rom = Prediction(
+                        attribute="memory_rom",
+                        value=_u.memory(str(rom_val), "ГБ"),
+                        confidence=0.95,
+                        source="regex",
+                        raw=slash_match.group(0).strip(),
+                    )
+            except Exception:
+                pass
+
+        # --- RAM (перед ROM, чтобы «8 гб озу» или «оперативка 8 гб» не ушли в rom) ---
         ram_match = self._RAM_RE2.search(text) or self._RAM_RE.search(text)
         ram_span: tuple[int, int] | None = None
         if ram_match:
@@ -268,18 +337,21 @@ class RegexExtractor:
             yield Prediction(
                 attribute="memory_ram",
                 value=_u.memory(ram_match.group(1), ram_match.group(2)),
-                confidence=self._conf(0.90, ram_match.group(0), title),
+                confidence=self._conf(0.93, ram_match.group(0), title),
                 source="regex", raw=ram_match.group(0).strip(),
             )
+        elif slash_ram:
+            yield slash_ram
 
         # --- ROM ---
+        found_rom = False
         for m in self._ROM_RE.finditer(text):
             if ram_span and self._overlaps(m.span(), ram_span):
                 continue
-            # отсеиваем мусор: если непосредственно перед числом идёт "озу"/"ram"
-            prefix_start = max(ram_span[1] if ram_span and m.start() >= ram_span[1] else 0, m.start() - 10)
+            # отсеиваем мусор: если непосредственно перед числом идёт "озу"/"ram"/"оперативка"
+            prefix_start = max(ram_span[1] if ram_span and m.start() >= ram_span[1] else 0, m.start() - 15)
             prefix = text[prefix_start:m.start()].lower()
-            if re.search(r"\b(?:озу|ram|оперативн\w*)\s*[:=]?\s*$", prefix):
+            if re.search(r"\b(?:озу|ram|оператив\w*)\s*[:=]?\s*$", prefix):
                 continue
             yield Prediction(
                 attribute="memory_rom",
@@ -287,7 +359,10 @@ class RegexExtractor:
                 confidence=self._conf(0.92, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
+            found_rom = True
             break
+        if not found_rom and slash_rom:
+            yield slash_rom
 
         # --- Экран ---
         if (m := self._SCREEN_RE.search(text)):
@@ -310,6 +385,14 @@ class RegexExtractor:
                 confidence=self._conf(0.90, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
+        elif (m := self._BATTERY_CTX_RE.search(text)):
+            mah = float(m.group(1).replace(",", "."))
+            if 400 <= mah <= 35000:
+                yield Prediction(
+                    attribute="battery", value=_u.battery(m.group(1)),
+                    confidence=self._conf(0.90, m.group(0), title),
+                    source="regex", raw=m.group(0).strip(),
+                )
 
         # --- Частота ---
         if (m := self._REFRESH_RE.search(text)):
@@ -414,9 +497,39 @@ class RegexExtractor:
                 out.append(self._CPU_CANON[low])
             elif re.fullmatch(r"m\d+", low):
                 out.append("M" + low[1:])
+            elif re.fullmatch(r"a\d+", low):
+                out.append("A" + low[1:])
             else:
                 out.append(tok)
         return " ".join(out)
+
+    @staticmethod
+    def _canon_model(val: str) -> str:
+        """Нормализация написания моделей телефонов."""
+        val = val.strip()
+        val = re.sub(r"^[аА](?=\d)", "A", val)
+        val = re.sub(r"^[сС](?=\d)", "S", val)
+        val = re.sub(r"5[гГ]\b", "5G", val)
+        val = re.sub(r"\b5g\b", "5G", val, flags=re.IGNORECASE)
+        words = val.split()
+        fixed_words = []
+        for w in words:
+            low = w.lower()
+            if low == "iphone":
+                fixed_words.append("iPhone")
+            elif low in {"galaxy", "redmi", "note", "edge", "xperia", "ultra", "plus", "pro", "max", "mini", "lite", "play", "neo", "turbo", "fusion"}:
+                fixed_words.append(low.capitalize())
+            elif low == "gt":
+                fixed_words.append("GT")
+            elif low in {"vi", "iv", "v", "ii", "iii"}:
+                fixed_words.append(low.upper())
+            elif re.match(r"^[a-z]\d{1,2}[a-z]?$", low):
+                fixed_words.append(low.upper())
+            elif low in {"нот", "хот"}:
+                fixed_words.append("HOT")
+            else:
+                fixed_words.append(w)
+        return " ".join(fixed_words)
 
     def _find_os(self, text: str):
         """Возвращает (raw_match, canonical) или None. Приоритет — самому

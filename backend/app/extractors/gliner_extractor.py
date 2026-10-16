@@ -50,15 +50,31 @@ class AttributeTypeValidator:
             # Цвет не может содержать цифры, технические характеристики или разрешения
             if re.search(r"\d", val_lower):
                 return False
-            return len(val_lower) >= 3
+            # Черный список маркетингового шума
+            bad_phrases = {"красивый дизайн", "дизайн", "стильный", "корпус", "новинка", "смартфон", "телефон", "камера", "зарядка"}
+            if any(bp in val_lower for bp in bad_phrases):
+                return False
+            # Цвет обязан содержать хотя бы один корень реального цвета
+            color_roots = {
+                "черн", "чёрн", "бел", "син", "красн", "сер", "золот", "зелен", "зелён",
+                "титан", "фиолет", "желт", "жёлт", "оранж", "розов", "серебр", "коричн",
+                "голуб", "бежев", "борд", "бронз", "перламутр", "мятн", "лавандов", "изумруд",
+                "графит", "black", "white", "blue", "red", "grey", "gray", "gold", "green",
+                "purple", "yellow", "orange", "pink", "silver", "brown", "cyan", "titanium",
+                "midnight", "starlight", "violet", "emerald", "mint"
+            }
+            return any(cr in val_lower for cr in color_roots)
 
         if attr_name == "model":
-            # Модель не должна быть одиночным общим словом или описанием процессора/памяти/батареи
+            # Модель не должна быть одиночным общим словом или описанием процессора/памяти/батареи/экрана
             bad_model_words = {
                 "смартфон", "телефон", "ноутбук", "планшет", "телевизор",
                 "наушники", "беспроводные", "пылесос", "робот-пылесос",
                 "холодильник", "процессор", "ядерный", "аккумулятор", "батарея",
                 "пикселей", "разрешение", "память", "оперативной",
+                "экран", "дисплей", "камера", "дизайн", "динамик",
+                "корпус", "стекло", "зарядка", "быстрая зарядка",
+                "чехол", "пленка", "плёнка", "блок питания",
             }
             if any(w in val_lower for w in bad_model_words):
                 return False
@@ -248,7 +264,17 @@ class GlinerExtractor:
             return BRANDS.get(low, raw_clean)
 
         if attr_key == "color":
-            return COLORS.get(low, raw_clean)
+            # Очистка префиксов вида "колор голд", "цв синий", "цвет черный"
+            clean_color = re.sub(r"^(?:цвет|колор|цв\.?|color[:\s]*)\s*", "", raw_clean, flags=re.I).strip()
+            low_color = clean_color.lower()
+            if low_color in COLORS:
+                c_val = COLORS[low_color]
+                return c_val[0] if isinstance(c_val, tuple) else c_val
+            for word in low_color.split():
+                if word in COLORS:
+                    c_val = COLORS[word]
+                    return c_val[0] if isinstance(c_val, tuple) else c_val
+            return clean_color
 
         if attr_key in ("memory_rom", "memory_ram"):
             m = self._NUM_UNIT_RE.search(raw_clean)
