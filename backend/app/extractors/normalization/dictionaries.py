@@ -1,94 +1,24 @@
-# app/extractors/normalization/dictionaries.py
-# ⚠️ Здесь только примеры. Реальный список брендов М.Видео — тысячи
-# записей, его надо грузить из CSV/БД, а не хардкодить.
+"""
+Словари для Tier 1.
 
-BRANDS: dict[str, str] = {
-    # синоним : канон
-    "apple": "Apple",
-    "эпл": "Apple",
-    "samsung": "Samsung",
-    "самсунг": "Samsung",
-    "сяоми": "Xiaomi",
-    "сяомi": "Xiaomi",
-    "xiaomi": "Xiaomi",
-    "mi": "Xiaomi",
-    "редми": "Xiaomi",       # Redmi — суббренд Xiaomi
-    "redmi": "Xiaomi",
-    "poco": "Xiaomi",
-    "huawei": "Huawei",
-    "хуавей": "Huawei",
-    "honor": "Honor",
-    "хонор": "Honor",
-    "realme": "Realme",
-    "oppo": "OPPO",
-    "vivo": "vivo",
-    "google": "Google",
-    "pixel": "Google",
-    "oneplus": "OnePlus",
-    "nothing": "Nothing",
-    "asus": "ASUS",
-    "аsus": "ASUS",
-    "acer": "Acer",
-    "lenovo": "Lenovo",
-    "hp": "HP",
-    "dell": "Dell",
-    "msi": "MSI",
-    "sony": "Sony",
-    "lg": "LG",
-    "philips": "Philips",
-    "bosch": "Bosch",
-    "aeg": "AEG",
-    "аег": "AEG",
-    "dyson": "Dyson",
-    "дайсон": "Dyson",
-    "roborock": "Roborock",
-    "dreame": "Dreame",
-    "viomi": "Viomi",
-    "haier": "Haier",
-    "whirlpool": "Whirlpool",
-}
+Данные лежат в backend/data/dictionaries/*.csv — их можно править
+без изменения Python-кода.
 
-# Цвета. Ключ — как встречается в тексте (в нижнем регистре),
-# значение — канон М.Видео.
-COLORS: dict[str, str] = {
-    # чёрный
-    "чёрный": "чёрный", "черный": "чёрный", "black": "чёрный",
-    "чёрная": "чёрный", "черная": "чёрный",
-    "midnight": "чёрный", "графит": "чёрный", "graphite": "чёрный",
-    "space gray": "серый", "space grey": "серый",
-    # белый
-    "белый": "белый", "белая": "белый", "white": "белый",
-    "silver": "серебристый", "серебристый": "серебристый",
-    "silver blue": "серебристый",
-    # красный
-    "красный": "красный", "красная": "красный",
-    "red": "красный", "алый": "красный",
-    # синий
-    "синий": "синий", "синяя": "синий", "blue": "синий",
-    "navy": "синий", "тёмно-синий": "синий",
-    "голубой": "голубой", "light blue": "голубой",
-    # зелёный
-    "зелёный": "зелёный", "зеленый": "зелёный", "green": "зелёный",
-    "mint": "зелёный", "мята": "зелёный",
-    # фиолетовый
-    "фиолетовый": "фиолетовый", "purple": "фиолетовый",
-    "violet": "фиолетовый", "lavender": "фиолетовый",
-    # розовый
-    "розовый": "розовый", "pink": "розовый",
-    # жёлтый / оранжевый / золотой
-    "жёлтый": "жёлтый", "желтый": "жёлтый", "yellow": "жёлтый",
-    "оранжевый": "оранжевый", "orange": "оранжевый",
-    "золотой": "золотой", "gold": "золотой",
-    # серый
-    "серый": "серый", "серая": "серый", "grey": "серый", "gray": "серый",
-    # титан/сталь
-    "titanium": "титановый", "титан": "титановый", "титановый": "титановый",
-}
+BRANDS  : dict[str, str]            — alias → canonical
+COLORS  : dict[str, tuple[str,int]] — alias → (canonical, priority)
+"""
+from __future__ import annotations
 
-# Единицы измерения, которые ловим регексом
-UNITS = {
-    "memory":     ["гб", "gb", "тб", "tb", "гигабайт", "терабайт"],
-    "screen":     ["дюйм", "дюйма", "дюймов", '"', "inch", "in", "”", "″"],
-    "battery":    ["мач", "mah", "а·ч", "ач"],
-    "refresh":    ["гц", "hz"],
+from app.extractors.normalization.loaders import load_pairs, load_colors
+
+# Загружается один раз при импорте модуля — работает как синглтон.
+BRANDS: dict[str, str] = load_pairs("brands.csv")
+COLORS: dict[str, tuple[str, int]] = load_colors("colors.csv")
+
+# UNITS оставляем в коде: их мало, и они не редактируются вручную.
+UNITS: dict[str, list[str]] = {
+    "memory":  ["гб", "gb", "тб", "tb", "гигабайт", "терабайт"],
+    "screen":  ["дюйм", "дюйма", "дюймов", '"', "inch", "in", "”", "″"],
+    "battery": ["мач", "mah", "а·ч", "ач"],
+    "refresh": ["гц", "hz"],
 }

@@ -34,6 +34,24 @@ CARDS = [
         "description": "Чёрные, с шумоподавлением.",
         "seller_attributes": {"color": "black"},
     },
+    {
+        "id": "demo-white-titanium",
+        "title": "Смартфон Apple iPhone 15 Pro Max 256GB White Titanium",
+        "description": "Флагман. Экран 6.7 дюймов.",
+        "seller_attributes": {},
+    },
+    {
+        "id": "demo-ru-color",
+        "title": "Смартфон Samsung Galaxy S24 256 ГБ СЕРЫЙ",
+        "description": "ЦВЕТ: серый титан.",
+        "seller_attributes": {},
+    },
+    {
+        "id": "demo-mixed-case",
+        "title": "XIAOMI Redmi Note 13 Pro 8 ГБ ОЗУ 256 ГБ SSD",
+        "description": "БАТАРЕЯ 5000 МАЧ, ЭКРАН 6.67 ДЮЙМОВ",
+        "seller_attributes": {},
+    }
 ]
 
 
