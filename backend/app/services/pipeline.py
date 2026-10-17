@@ -146,32 +146,26 @@ class CascadedExtractionPipeline:
         raw_title = (card.get("title") or "").strip()
         raw_desc = (card.get("description") or "").strip()
 
-        if raw_text and not raw_title:
-            lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
-            if len(lines) > 1:
-                card["title"] = lines[0]
-                card["description"] = " ".join(lines[1:])
-            else:
-                parts = re.split(r"(?<=[.!?])\s+", raw_text, 1)
-                if len(parts) == 2 and len(parts[0]) < 120:
-                    card["title"] = parts[0]
-                    card["description"] = raw_text
+        if raw_text:
+            # Для полноты контекста description ВСЕГДА содержит весь сырой текст целиком
+            card["description"] = raw_text
+            if not raw_title:
+                lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+                if lines and len(lines[0]) < 120:
+                    card["title"] = lines[0]
                 else:
-                    card["title"] = raw_text
-                    card["description"] = raw_text
-        elif raw_title and not raw_desc and (len(raw_title) > 100 or "\n" in raw_title):
+                    parts = re.split(r"(?<=[.!?])\s+", raw_text, 1)
+                    if len(parts) == 2 and len(parts[0]) < 120:
+                        card["title"] = parts[0]
+                    else:
+                        card["title"] = raw_text
+        elif raw_title and not raw_desc:
+            card["description"] = raw_title
             lines = [line.strip() for line in raw_title.split("\n") if line.strip()]
-            if len(lines) > 1:
+            if lines and len(lines[0]) < 120:
                 card["title"] = lines[0]
-                card["description"] = " ".join(lines[1:])
             else:
-                parts = re.split(r"(?<=[.!?])\s+", raw_title, 1)
-                if len(parts) == 2 and len(parts[0]) < 120:
-                    card["title"] = parts[0]
-                    card["description"] = raw_title
-                else:
-                    card["title"] = raw_title
-                    card["description"] = raw_title
+                card["title"] = raw_title
 
         # ------------------------------------------------------------------
         # ЭТАП 1: Определение категории товара

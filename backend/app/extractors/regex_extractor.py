@@ -239,9 +239,9 @@ class RegexExtractor:
             seen_attrs.add("color")
 
         # Модель по известным флагманским паттернам
-        raw_title = card.get("title") or ""
+        search_model_text = f"{card.get('title') or ''} {card.get('description') or ''} {card.get('raw_text') or ''}".strip()
         for pat in self._MODEL_PATTERNS:
-            if (m := pat.search(raw_title)):
+            if (m := pat.search(search_model_text)):
                 val = self._canon_model(m.group(1).strip())
                 out.append(Prediction(
                     attribute="model",
