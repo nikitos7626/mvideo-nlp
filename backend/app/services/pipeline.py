@@ -214,13 +214,20 @@ class CascadedExtractionPipeline:
         # ЭТАП 3: Tier 2 (GLiNER Zero-Shot NER) — таргетированно под категорию
         # ------------------------------------------------------------------
         if self.use_gliner and self.gliner_extractor and missing_attrs:
-            # Запрашиваем у GLiNER только те сущности, которых нет в Tier 1 или где уверенность < 0.88
-            needed_labels = [
-                lbl for lbl in gliner_labels
-                if (attr := self.gliner_extractor.LABEL_TO_ATTR.get(lbl)) is None
-                or attr not in predictions_map
-                or predictions_map[attr]["confidence"] < 0.88
-            ]
+            # Запрашиваем у GLiNER только те сущности, которых нет в Tier 1:
+            # Если атрибут не обязателен для категории (например процессор у смартфона),
+            # запрашиваем его у GLiNER только при наличии ключевых маркеров в тексте
+            raw_text_lower = f"{card.get('title', '')} {card.get('description', '')} {card.get('raw_text', '')}".lower()
+            needed_labels = []
+            for lbl in gliner_labels:
+                attr = self.gliner_extractor.LABEL_TO_ATTR.get(lbl)
+                if attr in predictions_map and predictions_map[attr]["confidence"] >= 0.88:
+                    continue
+                if attr not in required_attrs:
+                    if attr == "cpu" and not re.search(r"\b(чип|chip|cpu|процессор|ядер\w*|ghz|ггц|snapdragon|exynos|dimensity|bionic|tensor|kirin|core|ryzen)\b", raw_text_lower):
+                        continue
+                needed_labels.append(lbl)
+
             if needed_labels:
                 t2_preds = self.gliner_extractor.extract(card, target_labels=needed_labels, category_key=cat_key)
                 for p in t2_preds:
