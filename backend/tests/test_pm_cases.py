@@ -30,9 +30,9 @@ def test_pm_case_2_iphone_15_pro_max(pipeline):
     assert preds["model"] == "iPhone 15 Pro Max"
     assert preds["memory_rom"] == "512 ГБ"
     assert preds["cpu"] == "A17 Pro"
-    # Battery was not provided in card, must be missing and flagged for review
-    assert "battery" in res["missing"]
-    assert res["needs_review"] is True
+    # Батарея автоматически дозаполнена из каталога М.Видео (catalog_kb)
+    assert "battery" in preds
+    assert res["needs_review"] is False
 
 
 def test_pm_case_3_redmi_note_13_pro(pipeline):
@@ -97,8 +97,11 @@ def test_pm_case_7_infinix_hot_40(pipeline):
     assert "HOT 40" in preds["model"]
     # Fluff "красивый дизайн" must not be parsed as color
     assert "color" not in preds
+    # Батарея, экран и память подтянуты из каталога, остался только отсутствующий цвет
+    assert "battery" in preds
+    assert "screen_diagonal" in preds
+    assert "color" in res["missing"]
     assert res["needs_review"] is True
-    assert set(res["missing"]) == {"battery", "color", "memory_rom", "screen_diagonal"}
 
 
 def test_pm_case_8_huawei_p60_pro(pipeline):
