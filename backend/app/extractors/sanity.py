@@ -212,13 +212,17 @@ class AttributeSanityValidator:
         if attr_name == "cpu":
             if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "экран", "дисплей", "камера", "аккумулятор", "батарея"}:
                 return False
+            from app.extractors.normalization.dictionaries import BRANDS, COLORS
+            if val_lower in BRANDS or val_lower in COLORS:
+                return False
             known_chips = {
                 "intel", "core", "ryzen", "amd", "mediatek", "helio", "dimensity",
                 "snapdragon", "qualcomm", "apple", "bionic", "exynos", "m1", "m2",
                 "m3", "m4", "a14", "a15", "a16", "a17", "a18", "kirin", "tensor",
-                "celeron", "pentium", "geforce", "radeon"
+                "celeron", "pentium", "geforce", "radeon", "unisoc", "spreadtrum"
             }
-            return any(c in val_lower for c in known_chips) or bool(re.search(r"[a-zA-Z]", val_lower))
+            return any(c in val_lower for c in known_chips) or bool(re.search(r"\b(i[3579]|cpu|процессор|ядер\w*|ghz|ггц)\b", val_lower))
+
 
         # 10. Вес (Weight)
         if attr_name == "weight":

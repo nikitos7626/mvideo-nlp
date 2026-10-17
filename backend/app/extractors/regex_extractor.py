@@ -52,8 +52,10 @@ class RegexExtractor:
         r"(\d+(?:[.,]\d+)?)\s*(гб|gb)\s*(?:ram|озу|оператив\w*)\b"
     )
     _SLASH_MEM_RE = re.compile(
-        r"(?<!\d)(\d{1,2})\s*/\s*(\d{2,4})\s*(?:гб|gb)?\b"
+        r"(?<!\d)(\d{1,4})\s*(?:гб|gb)?\s*/\s*(\d{1,4})\s*(?:гб|gb)?\b",
+        re.IGNORECASE,
     )
+
     _MODEL_PATTERNS = [
         re.compile(r"\b(iphone\s+(?:se|\d{1,2}(?:\s*(?:pro\s*max|pro|plus|mini))?))\b", re.IGNORECASE),
         re.compile(r"\b(galaxy\s+[szanmfe]\d{1,2}[a-z]?(?:\s*(?:ultra|plus|\+|fe|pro|5g))?)\b", re.IGNORECASE),
@@ -333,11 +335,15 @@ class RegexExtractor:
         slash_match = self._SLASH_MEM_RE.search(title) or self._SLASH_MEM_RE.search(text)
         slash_ram = None
         slash_rom = None
+        slash_span: tuple[int, int] | None = None
         if slash_match:
             try:
-                ram_val = int(slash_match.group(1))
-                rom_val = int(slash_match.group(2))
-                if ram_val in (3, 4, 6, 8, 12, 16, 24, 32, 64) and rom_val in (32, 64, 128, 256, 512, 1024, 2048):
+                v1 = int(slash_match.group(1))
+                v2 = int(slash_match.group(2))
+                ram_val = min(v1, v2)
+                rom_val = max(v1, v2)
+                if ram_val in (3, 4, 6, 8, 12, 16, 24, 32, 48, 64) and rom_val in (16, 32, 64, 128, 256, 512, 1024, 2048):
+                    slash_span = slash_match.span()
                     slash_ram = Prediction(
                         attribute="memory_ram",
                         value=_u.memory(str(ram_val), "ГБ"),
@@ -374,6 +380,8 @@ class RegexExtractor:
         for m in self._ROM_RE.finditer(text):
             if ram_span and self._overlaps(m.span(), ram_span):
                 continue
+            if slash_span and self._overlaps(m.span(), slash_span):
+                continue
             # отсеиваем мусор: если непосредственно перед числом идёт "озу"/"ram"/"оперативка"
             prefix_start = max(ram_span[1] if ram_span and m.start() >= ram_span[1] else 0, m.start() - 15)
             prefix = text[prefix_start:m.start()].lower()
@@ -389,6 +397,7 @@ class RegexExtractor:
             break
         if not found_rom and slash_rom:
             yield slash_rom
+
 
         # --- Экран ---
         if (m := self._SCREEN_RE.search(text)):

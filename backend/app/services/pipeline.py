@@ -248,6 +248,15 @@ class CascadedExtractionPipeline:
                 if clean_m and len(clean_m) >= 2 and clean_m.lower() != b_val.lower():
                     predictions_map["model"]["value"] = clean_m
 
+        # Защита от перепутывания сущностей: процессор не может дублировать бренд или модель устройства
+        if "cpu" in predictions_map:
+            cpu_val = predictions_map["cpu"]["value"].lower().strip()
+            b_val = predictions_map.get("brand", {}).get("value", "").lower().strip()
+            m_val = predictions_map.get("model", {}).get("value", "").lower().strip()
+            if (b_val and b_val == cpu_val) or (m_val and m_val == cpu_val) or (b_val and m_val and f"{b_val} {m_val}" == cpu_val):
+                del predictions_map["cpu"]
+
+
         # ------------------------------------------------------------------
         # ЭТАП 3.5: Каталожное обогащение (Catalog Model Specs Enrichment)
         # Если после Tier 1 и Tier 2 остались пропущенные обязательные атрибуты,
