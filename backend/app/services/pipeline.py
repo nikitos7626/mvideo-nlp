@@ -6,8 +6,10 @@ from typing import Any
 
 from app.extractors.base import Prediction
 from app.extractors.gliner_extractor import GlinerExtractor
+from app.extractors.llm_extractor import StrictLlmFallbackExtractor
 from app.extractors.regex_extractor import RegexExtractor
 from app.extractors.sanity import AttributeSanityValidator
+from app.services.brand_registry import BrandRegistry
 from app.services.catalog_enricher import CatalogEnricher
 
 logger = logging.getLogger(__name__)
@@ -100,15 +102,19 @@ class CascadedExtractionPipeline:
         self,
         use_gliner: bool = True,
         use_catalog_enricher: bool = True,
+        use_llm: bool = True,
         confidence_threshold: float = 0.87,
         gliner_threshold: float = 0.30,
     ) -> None:
         self.confidence_threshold = confidence_threshold
         self.use_gliner = use_gliner
         self.use_catalog_enricher = use_catalog_enricher
+        self.use_llm = use_llm
         self.regex_extractor = RegexExtractor()
         self.gliner_extractor = GlinerExtractor(threshold=gliner_threshold) if use_gliner else None
         self.catalog_enricher = CatalogEnricher() if use_catalog_enricher else None
+        self.llm_extractor = StrictLlmFallbackExtractor() if use_llm else None
+        self.brand_registry = BrandRegistry.get_instance()
 
     def detect_category(self, card: dict[str, Any]) -> tuple[str, str]:
         """
@@ -261,6 +267,41 @@ class CascadedExtractionPipeline:
                 attr = p["attribute"]
                 if attr not in predictions_map:
                     predictions_map[attr] = p
+
+        # ------------------------------------------------------------------
+        # ЭТАП 3.8: Tier 3 Строгий LLM-фоллбэк (Strict LLM Fallback)
+        # Если после базы М.Видео все еще есть пропущенные обязательные атрибуты,
+        # делаем точечный запрос в LLM со строгой валидацией по ID модели
+        # ------------------------------------------------------------------
+        still_missing = required_attrs - set(predictions_map.keys())
+        if (
+            self.use_llm
+            and self.llm_extractor
+            and self.llm_extractor.is_enabled
+            and still_missing
+            and "brand" in predictions_map
+            and "model" in predictions_map
+        ):
+            b_val = predictions_map["brand"]["value"]
+            m_val = predictions_map["model"]["value"]
+            llm_preds = self.llm_extractor.enrich_missing_attributes(
+                brand=b_val,
+                model=m_val,
+                missing_attrs=still_missing,
+                category_key=cat_key,
+                raw_text=raw_text or card.get("description", ""),
+            )
+            for p in llm_preds:
+                attr = p["attribute"]
+                if attr not in predictions_map:
+                    predictions_map[attr] = p
+
+        # Автоматическая динамическая регистрация нового бренда в BrandRegistry
+        if "brand" in predictions_map and self.brand_registry:
+            b_val = predictions_map["brand"]["value"]
+            if not self.brand_registry.has_brand(b_val):
+                if predictions_map["brand"].get("confidence", 0) >= 0.88:
+                    self.brand_registry.register_brand(b_val)
 
         # ------------------------------------------------------------------
         # ЭТАП 4: Валидация полноты и расчет уверенности

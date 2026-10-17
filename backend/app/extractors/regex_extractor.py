@@ -195,7 +195,13 @@ class RegexExtractor:
         brands: dict[str, str] | None = None,
         colors: dict[str, tuple[str, int]] | None = None,
     ):
-        self._brands: dict[str, str] = brands or BRANDS
+        try:
+            from app.services.brand_registry import BrandRegistry
+            registry_brands = BrandRegistry.get_instance().brands
+        except Exception:
+            registry_brands = None
+
+        self._brands: dict[str, str] = brands or registry_brands or BRANDS
         self._colors: dict[str, tuple[str, int]] = colors or COLORS
 
         self._brand_kp = KeywordProcessor(case_sensitive=False)
@@ -214,6 +220,18 @@ class RegexExtractor:
             (re.compile(r"(?<!\w)" + re.escape(alias) + r"(?!\w)"), canon)
             for alias, canon in self._OS_MAP.items()
         ]
+
+        # Подписка на динамическое пополнение брендов на лету
+        try:
+            from app.services.brand_registry import BrandRegistry
+            BrandRegistry.get_instance().subscribe(self._on_new_brand)
+        except Exception:
+            pass
+
+    def _on_new_brand(self, alias: str, canon: str) -> None:
+        """Слушатель: мгновенно обогащает FlashText при регистрации нового бренда."""
+        self._brands[alias] = canon
+        self._brand_kp.add_keyword(alias, canon)
 
     # ================== публичный API ==================
 

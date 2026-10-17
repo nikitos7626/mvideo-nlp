@@ -1,0 +1,129 @@
+"""
+Тесты динамической регистрации брендов (BrandRegistry) и строгого LLM-фоллбэка (StrictLlmFallbackExtractor).
+"""
+from __future__ import annotations
+
+import uuid
+from unittest.mock import patch
+import pytest
+
+from app.extractors.llm_extractor import StrictLlmFallbackExtractor
+from app.extractors.regex_extractor import RegexExtractor
+from app.services.brand_registry import BrandRegistry
+from app.services.pipeline import CascadedExtractionPipeline
+
+
+def test_dynamic_brand_registration():
+    """
+    Проверяет:
+    1. Регистрацию нового бренда в BrandRegistry на лету.
+    2. Мгновенную реакцию RegexExtractor (FlashText) без перезапуска сервиса.
+    """
+    registry = BrandRegistry.get_instance()
+    uid = uuid.uuid4().hex[:6]
+    test_alias = f"novatech_{uid}"
+    test_canon = f"NovaTech_{uid.upper()}"
+
+    # До регистрации
+    assert not registry.has_brand(test_alias)
+
+    # Регистрация
+    ok = registry.register_brand(test_alias, test_canon)
+    assert ok is True
+    assert registry.has_brand(test_alias)
+    assert registry.get_canonical(test_alias) == test_canon
+
+    # RegexExtractor должен сразу находить этот бренд благодаря подписке
+    extractor = RegexExtractor()
+    preds = extractor.extract({"title": f"Смартфон {test_canon} Pro 256GB"})
+    brand_preds = [p for p in preds if p["attribute"] == "brand"]
+    assert len(brand_preds) == 1
+    assert brand_preds[0]["value"] == test_canon
+
+
+def test_strict_llm_fallback_disabled_by_default_without_key():
+    """
+    Проверяет безопасный фоллбэк: если API-ключ не задан, LLM не вызывается и не падает.
+    """
+    extractor = StrictLlmFallbackExtractor(api_key="")
+    assert extractor.is_enabled is False
+    res = extractor.enrich_missing_attributes(
+        brand="BrandX",
+        model="ModelY",
+        missing_attrs={"battery", "screen_diagonal"},
+        category_key="smartphones",
+    )
+    assert res == []
+
+
+def test_strict_llm_fallback_success_mocked():
+    """
+    Проверяет успешное заполнение недостающих полей через LLM при наличии строгой валидации.
+    """
+    extractor = StrictLlmFallbackExtractor(api_key="test-key", api_base="https://api.openai.com/v1")
+    assert extractor.is_enabled is True
+
+    mock_llm_response = '{"battery": "5000 мАч", "screen_diagonal": "6.67\\""}'
+
+    with patch.object(extractor, "_call_llm", return_value=mock_llm_response):
+        res = extractor.enrich_missing_attributes(
+            brand="Poco",
+            model="X6 Pro",
+            missing_attrs={"battery", "screen_diagonal"},
+            category_key="smartphones",
+        )
+
+        preds = {p["attribute"]: p["value"] for p in res}
+        sources = {p["attribute"]: p["source"] for p in res}
+
+        assert preds["battery"] == "5000 мАч"
+        assert preds["screen_diagonal"] == '6.67"'
+        assert sources["battery"] == "llm_strict"
+        assert sources["screen_diagonal"] == "llm_strict"
+
+
+def test_strict_llm_fallback_sanity_rejection_mocked():
+    """
+    Проверяет Guardrail: если LLM галлюцинирует абсурдное значение (120 000 мАч для телефона),
+    AttributeSanityValidator его отсекает, и галлюцинация не попадает в результат.
+    """
+    extractor = StrictLlmFallbackExtractor(api_key="test-key")
+
+    mock_insane_response = '{"battery": "120000 мАч", "screen_diagonal": "6.7\\""}'
+
+    with patch.object(extractor, "_call_llm", return_value=mock_insane_response):
+        res = extractor.enrich_missing_attributes(
+            brand="SuperPhone",
+            model="Pro",
+            missing_attrs={"battery", "screen_diagonal"},
+            category_key="smartphones",
+        )
+
+        preds = {p["attribute"]: p["value"] for p in res}
+        # 120 000 мАч отсеяно валидатором здравого смысла
+        assert "battery" not in preds
+        # 6.7" валидно и принято
+        assert preds["screen_diagonal"] == '6.7"'
+
+
+def test_pipeline_with_mocked_llm_enrichment():
+    """
+    Проверяет полный сквозной пайплайн с точечным вызовом LLM при отсутствии данных в каталоге.
+    """
+    pipeline = CascadedExtractionPipeline(use_gliner=False, use_catalog_enricher=False, use_llm=True)
+    pipeline.llm_extractor.is_enabled = True
+
+    mock_resp = '{"battery": "4800 мАч", "screen_diagonal": "6.5\\""}'
+    with patch.object(pipeline.llm_extractor, "_call_llm", return_value=mock_resp):
+        res = pipeline.process_card({
+            "title": "Смартфон Samsung Galaxy S25 256GB белый",
+            "description": "Продам телефон",
+        })
+
+        preds = {p["attribute"]: p["value"] for p in res["predictions"]}
+        sources = {p["attribute"]: p.get("source") for p in res["predictions"]}
+
+        assert preds["brand"] == "Samsung"
+        assert preds["memory_rom"] == "256 ГБ"
+        assert preds["battery"] == "4800 мАч"
+        assert sources["battery"] == "llm_strict"

@@ -68,6 +68,19 @@ def _rows_from_file(filename: str, raw: bytes) -> list[dict]:
 
 # --------------------------- эндпоинты ---------------------------
 
+@router.post("/brands/register")
+def register_brand(alias: str, canonical: str | None = None) -> dict:
+    """
+    Динамическая регистрация нового бренда в каталог М.Видео на лету.
+    Мгновенно добавляет в FlashText и сохраняет в brands.csv.
+    """
+    from app.services.brand_registry import BrandRegistry
+    registry = BrandRegistry.get_instance()
+    success = registry.register_brand(alias, canonical)
+    canon = registry.get_canonical(alias) or (canonical or alias.strip().title())
+    return {"ok": success, "brand": canon, "alias": alias.strip().lower()}
+
+
 @router.get("/health")
 def health() -> dict:
     """Быстрая проверка состояния экстракторов и пайплайна."""
