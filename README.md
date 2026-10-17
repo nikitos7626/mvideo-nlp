@@ -4,7 +4,7 @@
 > Команда: **Точка сборки (`team-059`)**  
 > 🌐 **Публичное Демо:** [https://tochka-sborki-2026-team-059.hub.gigaschool.ru](https://tochka-sborki-2026-team-059.hub.gigaschool.ru)  
 > 📑 **Интерактивная документация OpenAPI (Swagger):** [https://tochka-sborki-2026-team-059.hub.gigaschool.ru/docs](https://tochka-sborki-2026-team-059.hub.gigaschool.ru/docs)  
-> 🧪 **Статус тестов:** **80 / 80 PASS (100%)** | Скорость офлайн-обработки: **< 3 мс/карточка**
+> 🧪 **Статус тестов:** **83 / 83 PASS (100%)** | Скорость офлайн-обработки: **< 3 мс/карточка**
 
 ---
 
@@ -109,53 +109,80 @@ python -m pytest backend/tests
 
 ---
 
-## 📡 Спецификация API
+## 📦 Способы получения JSON (для тестов, скриптов и LLM-ревьюеров)
 
-### 1. Извлечение характеристик карточки
-`POST /api/extract`
+Система предоставляет **4 удобных способа** получения структурированного JSON, оптимизированных под автоматические проверки:
 
-**Пример запроса:**
+### Способ 1. Через HTTP REST API (`/api/extract` или `/extract`)
+Сервис развернут и доступен онлайн 24/7. Поддерживаются оба пути: канонический `/api/extract` и сокращенный алиас `/extract`:
+
 ```bash
 curl -X POST "https://tochka-sborki-2026-team-059.hub.gigaschool.ru/api/extract" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Смартфон Doogee V30 Pro 512GB чёрный",
-    "description": "Мощный смартфон для путешествий"
+    "title": "Смартфон Apple iPhone 15 Pro Max 256GB синий титан",
+    "description": "Флагманский смартфон с титановым корпусом"
   }'
 ```
 
-**Пример ответа:**
+> 💡 **Авто-дискавери для ботов и LLM:** Запрос `GET /` с заголовком `Accept: application/json` возвращает JSON-карту всех доступных эндпоинтов, а спецификация OpenAPI доступна по адресу `/openapi.json` и в Swagger UI по адресу `/docs`.
+
+### Способ 2. Через консольную утилиту CLI (`extract.py` в корне)
+Для автономных тестов без необходимости поднимать сервер:
+```bash
+# Прямая передача строки в аргументе:
+python extract.py "Смартфон Samsung Galaxy S24 256GB черный"
+
+# С разделением на заголовок и описание:
+python extract.py --title "Смартфон Xiaomi Redmi Note 13" --description "Память 8/256 ГБ, 5000 мАч"
+
+# Через пайплайн (stdin):
+echo "Холодильник LG No Frost серебристый" | python extract.py
+
+# Однострочный компактный JSON (для grep/jq):
+python extract.py --compact "Смартфон Apple iPhone 15 Pro Max 256GB"
+```
+
+### Способ 3. Прямой импорт в Python-коде
+```python
+from extract import extract_attributes
+
+result = extract_attributes("Смартфон Apple iPhone 15 Pro Max 256GB синий титан")
+print(result["predictions"])
+# [{"attribute": "brand", "value": "Apple", ...}, ...]
+```
+
+### Способ 4. Пакетная обработка файлов через API
+`POST /api/extract/batch` — принимает файлы `.csv` или `.json` со списком карточек и возвращает массив обогащенных результатов.
+
+---
+
+## 📡 Спецификация API и пример ответа
+
+### Формат ответа `CardOut`:
 ```json
 {
   "external_id": null,
   "category": "Смартфоны",
   "predictions": [
-    {"attribute": "brand", "value": "Doogee", "confidence": 0.95, "source": "flashtext"},
-    {"attribute": "color", "value": "чёрный", "confidence": 0.96, "source": "flashtext"},
-    {"attribute": "memory_rom", "value": "512 ГБ", "confidence": 0.95, "source": "regex"},
-    {"attribute": "model", "value": "V30 Pro", "confidence": 0.9549, "source": "gliner"},
-    {"attribute": "battery", "value": "4500 мАч", "confidence": 0.88, "source": "llm_strict"},
-    {"attribute": "screen_diagonal", "value": "6.53\"", "confidence": 0.88, "source": "llm_strict"}
+    {"attribute": "brand", "value": "Apple", "confidence": 0.95, "source": "flashtext"},
+    {"attribute": "color", "value": "синий", "confidence": 0.96, "source": "flashtext"},
+    {"attribute": "model", "value": "iPhone 15 Pro Max", "confidence": 0.96, "source": "regex"},
+    {"attribute": "memory_rom", "value": "256 ГБ", "confidence": 0.95, "source": "regex"},
+    {"attribute": "screen_diagonal", "value": "6.7\"", "confidence": 0.90, "source": "catalog_kb"},
+    {"attribute": "battery", "value": "4852 мАч", "confidence": 0.90, "source": "catalog_kb"}
   ],
   "missing": [],
-  "overall_confidence": 0.9291,
+  "overall_confidence": 0.9367,
   "needs_review": false
 }
 ```
 
-### 2. Пакетная обработка файлов
-`POST /api/extract/batch`
-Принимает файлы `.csv` или `.json` со списком карточек, возвращает массив с обогащенными атрибутами.
-
-### 3. Регистрация нового бренда на лету
-`POST /api/extract/brands/register?alias=supertech&canonical=SuperTech`
-Мгновенно обновляет память FlashText без рестарта.
-
-### 4. Healthcheck
-`GET /api/extract/health`
-```json
-{"ok": true, "pipeline": "CascadedExtractionPipeline", "tier1_regex": true, "tier2_gliner": true}
-```
+### Дополнительные эндпоинты:
+- `POST /api/extract/brands/register?alias=supertech&canonical=SuperTech` — регистрация нового бренда на лету.
+- `GET /api/extract/health` — статус здоровья каскада.
+- `GET /docs` — интерактивная документация Swagger UI.
+- `GET /openapi.json` — машиночитаемая схема OpenAPI 3.0.
 
 ---
 
@@ -164,6 +191,7 @@ curl -X POST "https://tochka-sborki-2026-team-059.hub.gigaschool.ru/api/extract"
 ```
 ├── README.md                                  # Документация проекта, архитектура и метрики
 ├── docker-compose.yml                         # Контейнеризация сервиса
+├── extract.py                                 # Универсальная консольная CLI-утилита для извлечения JSON
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                            # FastAPI приложение, CORS и монтирование UI
@@ -191,7 +219,7 @@ curl -X POST "https://tochka-sborki-2026-team-059.hub.gigaschool.ru/api/extract"
 │   ├── scripts/
 │   │   ├── build_catalog_kb.py                # Генератор KB из 546 000 офферов
 │   │   └── pm_cases.py                        # Эталонные кейсы М.Видео
-│   └── tests/                                 # 80 unit- и интеграционных тестов
+│   └── tests/                                 # 83 unit- и интеграционных тестов
 ```
 
 ---
