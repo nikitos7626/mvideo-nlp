@@ -7,6 +7,7 @@ from typing import Any
 from app.extractors.base import Prediction
 from app.extractors.gliner_extractor import GlinerExtractor
 from app.extractors.regex_extractor import RegexExtractor
+from app.extractors.sanity import AttributeSanityValidator
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,9 @@ CATEGORY_SCHEMAS: dict[str, dict[str, Any]] = {
     "smartphones": {
         "name_ru": "Смартфоны",
         "keywords": [
-            "смартфон", "телефон", "iphone", "айфон", "galaxy", "redmi", "poco",
-            "realme", "motorola", "моторола", "infinix", "инфиникс", "xperia",
-            "pixel", "пиксель", "oneplus", "oppo", "vivo", "honor", "хонор",
+            "смартфон", "телефон", "iphone", "айфон", "мобильный", "сотовый",
+            "galaxy", "redmi", "poco", "realme", "motorola", "моторола", "infinix", "инфиникс",
+            "xperia", "pixel", "пиксель", "oneplus", "oppo", "vivo", "honor", "хонор",
             "huawei", "хуавей", "xiaomi", "сяоми", "samsung", "самсунг", "tecno", "текно",
         ],
         "required_attrs": {"brand", "model", "memory_rom", "screen_diagonal", "battery", "color"},
@@ -106,19 +107,31 @@ class CascadedExtractionPipeline:
         desc = (card.get("description") or "").lower()
         text_corpus = f"{raw_cat} {title} {desc}"
 
-        # 1. Поиск по ключевым словам таксономии
-        for cat_key, schema in CATEGORY_SCHEMAS.items():
-            if cat_key == "default":
+        # 1. Порядок проверки категорий: специфичные крупные приборы имеют высший приоритет,
+        # чтобы бренд Xiaomi/Samsung не стягивал пылесосы или телевизоры в смартфоны.
+        priority_order = [
+            "vacuum_cleaners",
+            "refrigerators",
+            "tvs",
+            "laptops",
+            "headphones",
+            "smartphones",
+        ]
+        for cat_key in priority_order:
+            schema = CATEGORY_SCHEMAS.get(cat_key)
+            if not schema:
                 continue
             for kw in schema["keywords"]:
-                # Словарное совпадение с границами слов или морфемой
                 if re.search(rf"\b{re.escape(kw)}", text_corpus):
                     return cat_key, schema["name_ru"]
 
         # 2. Эвристика: экран <= 7.2" и аккумулятор mAh / мобильные паттерны -> Смартфоны
-        if re.search(r"\b(?:[56]\.\d{1,2}|7\.[012])\s*(?:\"|дюйм)", text_corpus) and re.search(r"\b\d{3,5}\s*(?:мач|mah|аккум)\b", text_corpus):
+        has_mobile_screen = bool(re.search(r"\b(?:[56]\.\d{1,2}|7\.[012])\s*(?:\"|дюйм)", text_corpus))
+        has_battery = bool(re.search(r"(?:\d{3,5}\s*(?:мач|mah|аккум)|(?:мач|mah|аккум)\s*\d{3,5})", text_corpus))
+        if has_mobile_screen and has_battery:
             return "smartphones", CATEGORY_SCHEMAS["smartphones"]["name_ru"]
-        if re.search(r"\b\d{1,2}/\d{2,4}\s*(?:гб|gb)?\b", text_corpus) and re.search(r"\b\d{3,5}\s*(?:мач|mah)\b", text_corpus):
+
+        if re.search(r"\b\d{1,2}/\d{2,4}\s*(?:гб|gb)?\b", text_corpus) and has_battery:
             return "smartphones", CATEGORY_SCHEMAS["smartphones"]["name_ru"]
 
         return "default", CATEGORY_SCHEMAS["default"]["name_ru"]
@@ -170,10 +183,10 @@ class CascadedExtractionPipeline:
         # ------------------------------------------------------------------
         # ЭТАП 2: Tier 1 (Regex + FlashText)
         # ------------------------------------------------------------------
-        t1_preds = self.regex_extractor.extract(card)
+        t1_preds = self.regex_extractor.extract(card, category_key=cat_key)
         for p in t1_preds:
-            # Для не-смартфонов и не-ноутбуков отсекаем ложные числа памяти
-            if cat_key in ("vacuum_cleaners", "refrigerators") and p["attribute"] in ("memory_rom", "memory_ram", "screen_diagonal"):
+            # Строгая валидация физического здравого смысла и кросс-загрязнений
+            if not AttributeSanityValidator.is_valid(p["attribute"], p["value"], cat_key):
                 continue
             predictions_map[p["attribute"]] = p
 
@@ -184,7 +197,7 @@ class CascadedExtractionPipeline:
         # ЭТАП 3: Tier 2 (GLiNER Zero-Shot NER) — таргетированно под категорию
         # ------------------------------------------------------------------
         if self.use_gliner and self.gliner_extractor and missing_attrs:
-            # Запрашиваем у GLiNER только те сущности, которых нет в Tier 1 или где уверенность < 0.85
+            # Запрашиваем у GLiNER только те сущности, которых нет в Tier 1 или где уверенность < 0.88
             needed_labels = [
                 lbl for lbl in gliner_labels
                 if (attr := self.gliner_extractor.LABEL_TO_ATTR.get(lbl)) is None
@@ -192,9 +205,12 @@ class CascadedExtractionPipeline:
                 or predictions_map[attr]["confidence"] < 0.88
             ]
             if needed_labels:
-                t2_preds = self.gliner_extractor.extract(card, target_labels=needed_labels)
+                t2_preds = self.gliner_extractor.extract(card, target_labels=needed_labels, category_key=cat_key)
                 for p in t2_preds:
                     attr = p["attribute"]
+                    # Строгая валидация физического здравого смысла (отсечение перепутанных Гц в батарее и т.д.)
+                    if not AttributeSanityValidator.is_valid(attr, p["value"], cat_key):
+                        continue
                     existing = predictions_map.get(attr)
                     if existing is None:
                         predictions_map[attr] = p

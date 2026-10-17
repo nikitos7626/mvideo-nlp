@@ -1,0 +1,245 @@
+"""
+Централизованный модуль валидации физического здравого смысла (Sanity Check)
+и защиты от галлюцинаций / перепутанных единиц измерения.
+
+Применяется на ВСЕХ уровнях каскада:
+  - Tier 1: Regex & FlashText
+  - Tier 2: GLiNER Zero-Shot NER
+  - Tier 3: LLM Fallback
+  - Pipeline Master Gate: финальный аудит перед выдачей JSON в каталог.
+"""
+from __future__ import annotations
+
+import re
+from typing import Any
+
+
+class AttributeSanityValidator:
+    """
+    Строгий физический и контекстный валидатор атрибутов товаров.
+    Проверяет:
+      1. Запрещенные единицы (кросс-загрязнение: Гц в батарее, дюймы в памяти и т.д.)
+      2. Физические допустимые диапазоны с учетом категории товара
+      3. Атрибуты, недопустимые для данной категории (например, экран у пылесоса или память у холодильника)
+      4. Черный список маркетингового мусора (для цвета и модели)
+    """
+
+    # Матрицы экрана
+    ALLOWED_DISPLAY_TECHS: dict[str, str] = {
+        "triluminos": "Triluminos",
+        "oled": "OLED",
+        "олед": "OLED",
+        "amoled": "AMOLED",
+        "super amoled": "Super AMOLED",
+        "superamoled": "Super AMOLED",
+        "qled": "QLED",
+        "клед": "QLED",
+        "neo qled": "Neo QLED",
+        "ips": "IPS",
+        "ипс": "IPS",
+        "va": "VA",
+        "tn": "TN",
+        "nanocell": "NanoCell",
+        "mini led": "Mini-LED",
+        "mini-led": "Mini-LED",
+        "retina": "Retina",
+        "poled": "pOLED",
+    }
+
+    # Недопустимые атрибуты по категориям
+    FORBIDDEN_ATTRS_BY_CATEGORY: dict[str, set[str]] = {
+        "vacuum_cleaners": {"memory_rom", "memory_ram", "screen_diagonal", "refresh_rate", "resolution", "cpu", "os", "defrost_system"},
+        "refrigerators": {"memory_rom", "memory_ram", "screen_diagonal", "refresh_rate", "resolution", "cpu", "os", "cleaning_type", "battery"},
+        "headphones": {"screen_diagonal", "refresh_rate", "resolution", "memory_rom", "memory_ram", "cleaning_type", "defrost_system"},
+        "tvs": {"cleaning_type", "defrost_system", "battery", "memory_ram"},
+    }
+
+    # Корни реальных цветов
+    COLOR_ROOTS: set[str] = {
+        "черн", "чёрн", "бел", "син", "красн", "сер", "золот", "зелен", "зелён",
+        "титан", "фиолет", "желт", "жёлт", "оранж", "розов", "серебр", "коричн",
+        "голуб", "бежев", "борд", "бронз", "перламутр", "мятн", "лавандов", "изумруд",
+        "графит", "black", "white", "blue", "red", "grey", "gray", "gold", "green",
+        "purple", "yellow", "orange", "pink", "silver", "brown", "cyan", "titanium",
+        "midnight", "starlight", "violet", "emerald", "mint", "dark", "light"
+    }
+
+    # Мусорные слова для моделей
+    BAD_MODEL_WORDS: set[str] = {
+        "смартфон", "телефон", "ноутбук", "планшет", "телевизор",
+        "наушники", "беспроводные", "пылесос", "робот-пылесос",
+        "холодильник", "процессор", "ядерный", "аккумулятор", "батарея",
+        "пикселей", "разрешение", "память", "оперативной",
+        "экран", "дисплей", "камера", "дизайн", "динамик",
+        "корпус", "стекло", "зарядка", "быстрая зарядка",
+        "чехол", "пленка", "плёнка", "блок питания", "оригинал", "новые", "новый"
+    }
+
+    @classmethod
+    def is_valid(cls, attr_name: str, value: str, category_key: str = "default") -> bool:
+        """
+        Главная точка входа. Возвращает True, только если значение физически правдоподобно.
+        """
+        if not value or not str(value).strip():
+            return False
+
+        val_lower = str(value).lower().strip()
+
+        # 1. Проверка на несовместимость категории и атрибута
+        forbidden = cls.FORBIDDEN_ATTRS_BY_CATEGORY.get(category_key, set())
+        if attr_name in forbidden:
+            return False
+
+        # 2. Батарея (Battery)
+        if attr_name == "battery":
+            # Кросс-загрязнение: батарея не может содержать Гц, дюймы, память или ватты
+            if any(u in val_lower for u in ["гц", "hz", "дюйм", '"', "гб", "gb", "тб", "ватт", "вт", "w"]):
+                return False
+            m = re.search(r"(\d+)", val_lower.replace(" ", ""))
+            if not m:
+                return False
+            val_mah = int(m.group(1))
+
+            # Физические диапазоны по категориям
+            if category_key == "smartphones":
+                # Смартфон не может иметь батарею 144 мАч или 50 000 мАч
+                return 800 <= val_mah <= 12000
+            elif category_key == "headphones":
+                return 25 <= val_mah <= 1500
+            elif category_key == "vacuum_cleaners":
+                return 1000 <= val_mah <= 15000
+            else:
+                return 300 <= val_mah <= 40000
+
+        # 3. Экран (Screen Diagonal)
+        if attr_name == "screen_diagonal":
+            # Не может содержать память, батарею, частоту или ватты
+            if any(u in val_lower for u in ["гб", "gb", "тб", "tb", "мач", "mah", "гц", "hz", "ватт", "вт"]):
+                return False
+            m = re.search(r"(\d{1,3}(?:[.,]\d{1,2})?)", val_lower)
+            if not m:
+                return False
+            diag = float(m.group(1).replace(",", "."))
+
+            # Физические диапазоны по категориям
+            if category_key == "smartphones":
+                # Смартфон: от 3.5" (iPhone 4) до 7.6" (Fold в раскрытом виде)
+                return 3.5 <= diag <= 7.8
+            elif category_key == "laptops":
+                # Ноутбук: от 11.0" до 19.0"
+                return 11.0 <= diag <= 19.0
+            elif category_key == "tvs":
+                # Телевизор: от 20" до 120"
+                return 20.0 <= diag <= 120.0
+            else:
+                return 3.0 <= diag <= 120.0
+
+        # 4. Память ROM (Накопитель)
+        if attr_name == "memory_rom":
+            if any(u in val_lower for u in ['"', "дюйм", "мач", "mah", "гц", "hz", "ватт"]):
+                return False
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(гб|gb|тб|tb)?", val_lower)
+            if not m:
+                return False
+            num = float(m.group(1).replace(",", "."))
+            unit = (m.group(2) or "гб").lower()
+            val_gb = num * 1024 if "т" in unit else num
+
+            if category_key == "smartphones":
+                # Смартфон: от 16 ГБ до 2048 ГБ (2 ТБ)
+                return 16 <= val_gb <= 2048
+            elif category_key == "laptops":
+                return 32 <= val_gb <= 8192
+            else:
+                return 8 <= val_gb <= 16384
+
+        # 5. Память RAM (ОЗУ)
+        if attr_name == "memory_ram":
+            if any(u in val_lower for u in ['"', "дюйм", "мач", "mah", "гц", "hz", "ватт"]):
+                return False
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(гб|gb)?", val_lower)
+            if not m:
+                return False
+            val_ram = float(m.group(1).replace(",", "."))
+
+            if category_key == "smartphones":
+                # Смартфон: RAM от 1 ГБ до 32 ГБ
+                return 1 <= val_ram <= 32
+            elif category_key == "laptops":
+                return 2 <= val_ram <= 128
+            else:
+                return 1 <= val_ram <= 128
+
+        # 6. Частота обновления (Refresh Rate)
+        if attr_name == "refresh_rate":
+            if any(u in val_lower for u in ["мач", "mah", "дюйм", '"', "гб", "gb", "тб"]):
+                return False
+            m = re.search(r"(\d{2,3})", val_lower)
+            if not m:
+                return False
+            hz = int(m.group(1))
+            return 48 <= hz <= 360
+
+        # 7. Цвет (Color)
+        if attr_name == "color":
+            # Цвет не может содержать цифры (например, "15 Pro", "256GB" — это не цвет)
+            if re.search(r"\d", val_lower):
+                return False
+            # Черный список маркетингового шума
+            bad_phrases = {"красивый дизайн", "дизайн", "стильный", "корпус", "новинка", "смартфон", "телефон", "камера", "зарядка"}
+            if any(bp in val_lower for bp in bad_phrases):
+                return False
+            # Обязан содержать корень реального цвета
+            return any(cr in val_lower for cr in cls.COLOR_ROOTS)
+
+        # 8. Модель (Model)
+        if attr_name == "model":
+            if any(w in val_lower for w in cls.BAD_MODEL_WORDS):
+                return False
+            # Модель не должна быть чисто служебным словом или числом без букв
+            return len(val_lower) >= 2
+
+        # 9. Процессор (CPU)
+        if attr_name == "cpu":
+            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "экран", "дисплей", "камера", "аккумулятор", "батарея"}:
+                return False
+            known_chips = {
+                "intel", "core", "ryzen", "amd", "mediatek", "helio", "dimensity",
+                "snapdragon", "qualcomm", "apple", "bionic", "exynos", "m1", "m2",
+                "m3", "m4", "a14", "a15", "a16", "a17", "a18", "kirin", "tensor",
+                "celeron", "pentium", "geforce", "radeon"
+            }
+            return any(c in val_lower for c in known_chips) or bool(re.search(r"[a-zA-Z]", val_lower))
+
+        # 10. Вес (Weight)
+        if attr_name == "weight":
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(г|g|кг|kg)?", val_lower)
+            if not m:
+                return False
+            val_num = float(m.group(1).replace(",", "."))
+            unit = (m.group(2) or "г").lower()
+            val_g = val_num * 1000 if "к" in unit else val_num
+
+            if category_key == "smartphones":
+                # Смартфон: от 100 г до 400 г
+                return 100 <= val_g <= 400
+            elif category_key == "laptops":
+                # Ноутбук: от 700 г до 6000 г
+                return 700 <= val_g <= 6000
+            elif category_key == "headphones":
+                return 20 <= val_g <= 600
+            return 20 <= val_g <= 100000
+
+        # 11. Тип уборки
+        if attr_name == "cleaning_type":
+            return any(k in val_lower for k in ["сух", "влажн", "комбинир"])
+
+        # 12. Система разморозки
+        if attr_name == "defrost_system":
+            return any(k in val_lower for k in ["no frost", "ноу фрост", "капельн", "ручн", "автомат"])
+
+        # 13. Технология экрана
+        if attr_name == "display_tech":
+            return any(k in val_lower for k in cls.ALLOWED_DISPLAY_TECHS)
+
+        return True

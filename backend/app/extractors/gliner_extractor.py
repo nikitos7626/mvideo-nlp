@@ -10,6 +10,7 @@ from gliner import GLiNER
 from app.extractors.base import Prediction
 from app.extractors.normalization.dictionaries import BRANDS, COLORS
 from app.extractors.normalization.units import UnitNormalizer
+from app.extractors.sanity import AttributeSanityValidator
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ class GlinerExtractor:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._model: GLiNER | None = None
         self._units = UnitNormalizer()
-        self._validator = AttributeTypeValidator()
+        self._validator = AttributeSanityValidator
 
     def _ensure_model(self) -> GLiNER:
         if self._model is None:
@@ -200,7 +201,12 @@ class GlinerExtractor:
             logger.error("Health check failed for GLiNER: %s", e)
             return False
 
-    def extract(self, card: dict[str, Any], target_labels: list[str] | None = None) -> list[Prediction]:
+    def extract(
+        self,
+        card: dict[str, Any],
+        target_labels: list[str] | None = None,
+        category_key: str = "default",
+    ) -> list[Prediction]:
         title = (card.get("title") or "").strip()
         description = (card.get("description") or "").strip()
         model = self._ensure_model()
@@ -216,7 +222,7 @@ class GlinerExtractor:
                 t_labels = self.TITLE_LABELS
             title_entities = model.predict_entities(title, t_labels, threshold=self.threshold)
             for ent in sorted(title_entities, key=lambda x: float(x.get("score", 0.0)), reverse=True):
-                pred = self._entity_to_prediction(ent, is_title=True)
+                pred = self._entity_to_prediction(ent, is_title=True, category_key=category_key)
                 if pred and pred["attribute"] not in seen_attrs:
                     predictions.append(pred)
                     seen_attrs.add(pred["attribute"])
@@ -226,14 +232,14 @@ class GlinerExtractor:
             d_labels = target_labels or self.DESC_LABELS
             desc_entities = model.predict_entities(description, d_labels, threshold=self.threshold)
             for ent in sorted(desc_entities, key=lambda x: float(x.get("score", 0.0)), reverse=True):
-                pred = self._entity_to_prediction(ent, is_title=False)
+                pred = self._entity_to_prediction(ent, is_title=False, category_key=category_key)
                 if pred and pred["attribute"] not in seen_attrs:
                     predictions.append(pred)
                     seen_attrs.add(pred["attribute"])
 
         return predictions
 
-    def _entity_to_prediction(self, ent: dict, is_title: bool) -> Prediction | None:
+    def _entity_to_prediction(self, ent: dict, is_title: bool, category_key: str = "default") -> Prediction | None:
         label = ent["label"]
         attr_key = self.LABEL_TO_ATTR.get(label)
         if not attr_key:
@@ -242,13 +248,16 @@ class GlinerExtractor:
         raw_text = ent["text"].strip()
         score = float(ent["score"])
 
-        # Валидация правдоподобности спана
-        if not self._validator.is_valid(attr_key, raw_text):
+        # Валидация физического здравого смысла и контекста категории
+        if not self._validator.is_valid(attr_key, raw_text, category_key=category_key):
             return None
 
         # Нормализация
         canon_val = self._normalize(attr_key, raw_text)
         if not canon_val:
+            return None
+
+        if not self._validator.is_valid(attr_key, canon_val, category_key=category_key):
             return None
 
         # Калибровка уверенности:

@@ -8,6 +8,7 @@ from flashtext import KeywordProcessor
 from app.extractors.base import Prediction
 from app.extractors.normalization.dictionaries import BRANDS, COLORS
 from app.extractors.normalization.units import UnitNormalizer
+from app.extractors.sanity import AttributeSanityValidator
 
 _u = UnitNormalizer()
 
@@ -218,7 +219,7 @@ class RegexExtractor:
     def health(self) -> bool:
         return True
 
-    def extract(self, card: dict) -> list[Prediction]:
+    def extract(self, card: dict, category_key: str = "default") -> list[Prediction]:
         title = (card.get("title") or "").lower()
         description = (card.get("description") or "").lower()
         seller = card.get("seller_attributes") or {}
@@ -256,7 +257,11 @@ class RegexExtractor:
                 out.append(pred)
                 seen_attrs.add(pred["attribute"])
 
-        return out
+        # Физическая валидация здравого смысла и контекста категории
+        return [
+            p for p in out
+            if AttributeSanityValidator.is_valid(p["attribute"], p["value"], category_key)
+        ]
 
     # ================== FlashText-хелперы ==================
 
