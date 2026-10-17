@@ -199,11 +199,14 @@ class AttributeSanityValidator:
         if attr_name == "model":
             if any(w in val_lower for w in cls.BAD_MODEL_WORDS):
                 return False
-            from app.extractors.normalization.dictionaries import BRANDS
+            from app.extractors.normalization.dictionaries import BRANDS, COLORS
             if val_lower in BRANDS:
+                return False
+            if val_lower in COLORS:
                 return False
             # Модель не должна быть чисто служебным словом или числом без букв
             return len(val_lower) >= 2
+
 
         # 9. Процессор (CPU)
         if attr_name == "cpu":

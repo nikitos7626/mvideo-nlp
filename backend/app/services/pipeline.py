@@ -273,7 +273,9 @@ class CascadedExtractionPipeline:
         # Если после базы М.Видео все еще есть пропущенные обязательные атрибуты,
         # делаем точечный запрос в LLM со строгой валидацией по ID модели
         # ------------------------------------------------------------------
-        still_missing = required_attrs - set(predictions_map.keys())
+        # Атрибуты, которые принципиально нельзя додумывать по названию модели (вариативные свойства конкретного оффера)
+        NON_ENRICHABLE_FROM_MODEL = {"color"}
+        still_missing = (required_attrs - set(predictions_map.keys())) - NON_ENRICHABLE_FROM_MODEL
         if (
             self.use_llm
             and self.llm_extractor

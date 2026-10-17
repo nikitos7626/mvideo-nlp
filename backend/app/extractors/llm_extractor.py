@@ -33,13 +33,16 @@ class StrictLlmFallbackExtractor:
         model: str | None = None,
         timeout: float = 3.5,
     ) -> None:
-        self.api_key = api_key or os.environ.get("LLM_API_KEY") or getattr(settings, "llm_api_key", "")
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = os.environ.get("LLM_API_KEY") or getattr(settings, "llm_api_key", "")
         self.api_base = (
             api_base
             or os.environ.get("LLM_API_BASE")
-            or getattr(settings, "llm_api_base", "https://api.openai.com/v1")
+            or getattr(settings, "llm_api_base", "https://hub.gigaschool.ru/api/v1/llm/v1")
         ).rstrip("/")
-        self.model = model or os.environ.get("LLM_MODEL") or getattr(settings, "llm_model", "gpt-4o-mini")
+        self.model = model or os.environ.get("LLM_MODEL") or getattr(settings, "llm_model", "ai-sage/GigaChat3-10B-A1.8B")
         self.timeout = timeout
         self.is_enabled = bool(self.api_key and self.api_key.strip())
 
@@ -82,6 +85,67 @@ class StrictLlmFallbackExtractor:
             logger.warning("LLM call failed or timed out: %s", e)
 
         return None
+
+    @staticmethod
+    def _normalize_llm_value(attr: str, raw_val: Any) -> str | None:
+        """
+        Приводит сырое значение от LLM к каноническому виду со стандартизированными единицами каталога М.Видео.
+        Обрабатывает вложенные словари (например {"capacity": "5000 mAh"}), числа (int/float)
+        и нормализует единицы измерения (мАч, ГБ, дюймы, Гц, кг/г).
+        """
+        if raw_val is None:
+            return None
+
+        # Если модель вернула вложенный JSON/dict
+        if isinstance(raw_val, dict):
+            for k in ("value", "capacity", "size", "diagonal", "amount", "val", "text"):
+                if k in raw_val and raw_val[k] is not None:
+                    raw_val = raw_val[k]
+                    break
+            else:
+                scalars = [v for v in raw_val.values() if isinstance(v, (str, int, float)) and v is not None]
+                if scalars:
+                    raw_val = scalars[0]
+                else:
+                    return None
+
+        # Преобразуем к строке
+        val_str = str(raw_val).strip()
+        if not val_str or val_str.lower() in ("null", "none", "unknown", "нет", "н/д", "n/a", "-", "undefined"):
+            return None
+
+        # Нормализация единиц по типу атрибута
+        if attr == "battery":
+            m = re.search(r"(\d{3,6})", val_str.replace(" ", ""))
+            if m:
+                return f"{int(m.group(1))} мАч"
+        elif attr == "screen_diagonal":
+            m = re.search(r"(\d{1,3}(?:[.,]\d{1,2})?)", val_str)
+            if m:
+                clean_num = m.group(1)
+                return f'{clean_num}"'
+        elif attr in ("memory_ram", "memory_rom"):
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(гб|gb|тб|tb)?", val_str, re.IGNORECASE)
+            if m:
+                num = m.group(1)
+                unit_raw = (m.group(2) or "гб").upper()
+                if "Т" in unit_raw or "T" in unit_raw:
+                    return f"{num} ТБ"
+                return f"{num} ГБ"
+        elif attr == "refresh_rate":
+            m = re.search(r"(\d{2,4})", val_str)
+            if m:
+                return f"{int(m.group(1))} Гц"
+        elif attr == "weight":
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(кг|kg|гр|грамм\w*|г|g)?", val_str, re.IGNORECASE)
+            if m:
+                num = m.group(1)
+                unit_raw = (m.group(2) or "г").lower()
+                if unit_raw.startswith("к") or "kg" in unit_raw:
+                    return f"{num} кг"
+                return f"{num} г"
+
+        return val_str
 
     def enrich_missing_attributes(
         self,
@@ -135,12 +199,9 @@ class StrictLlmFallbackExtractor:
 
         out: list[Prediction] = []
         for attr in missing_attrs:
-            val = data.get(attr)
-            if not val or not isinstance(val, str):
-                continue
-
-            val_clean = val.strip()
-            if not val_clean or val_clean.lower() in ("null", "none", "unknown", "нет"):
+            raw_val = data.get(attr)
+            val_clean = self._normalize_llm_value(attr, raw_val)
+            if not val_clean:
                 continue
 
             # Физическая валидация здравого смысла М.Видео
@@ -157,6 +218,7 @@ class StrictLlmFallbackExtractor:
             })
 
         return out
+
 
     def verify_new_brand(self, candidate_brand: str, context: str = "") -> bool:
         """

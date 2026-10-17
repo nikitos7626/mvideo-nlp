@@ -58,3 +58,7 @@ backend/scripts/enrich_*.py
 backend/scripts/inspect_*.py
 
 
+# Environment variables
+.env
+.env.*
+!.env.example

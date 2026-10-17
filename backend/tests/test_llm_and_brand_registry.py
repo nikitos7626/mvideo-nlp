@@ -27,9 +27,10 @@ def test_dynamic_brand_registration():
     # До регистрации
     assert not registry.has_brand(test_alias)
 
-    # Регистрация
-    ok = registry.register_brand(test_alias, test_canon)
+    # Регистрация (in-memory test with persist=False)
+    ok = registry.register_brand(test_alias, test_canon, persist=False)
     assert ok is True
+
     assert registry.has_brand(test_alias)
     assert registry.get_canonical(test_alias) == test_canon
 
@@ -127,3 +128,38 @@ def test_pipeline_with_mocked_llm_enrichment():
         assert preds["memory_rom"] == "256 ГБ"
         assert preds["battery"] == "4800 мАч"
         assert sources["battery"] == "llm_strict"
+
+
+def test_llm_normalization_nested_and_numeric():
+    """
+    Проверяет, что LLM extractor корректно преобразует сырые числа, единицы и вложенные структуры
+    в стандартные форматы М.Видео (мАч, дюймы, ГБ).
+    """
+    extractor = StrictLlmFallbackExtractor(api_key="test-key")
+    mock_resp = '{"battery": 5000, "screen_diagonal": 6.78, "memory_ram": {"capacity": "12 GB"}}'
+
+    with patch.object(extractor, "_call_llm", return_value=mock_resp):
+        res = extractor.enrich_missing_attributes(
+            brand="Realme",
+            model="GT 6T",
+            missing_attrs={"battery", "screen_diagonal", "memory_ram"},
+            category_key="smartphones",
+        )
+
+        preds = {p["attribute"]: p["value"] for p in res}
+        assert preds["battery"] == "5000 мАч"
+        assert preds["screen_diagonal"] == '6.78"'
+        assert preds["memory_ram"] == "12 ГБ"
+
+
+def test_llm_verify_new_brand():
+    """
+    Проверяет валидацию кандидата в бренды через LLM (YES / NO).
+    """
+    extractor = StrictLlmFallbackExtractor(api_key="test-key")
+
+    with patch.object(extractor, "_call_llm", return_value="YES"):
+        assert extractor.verify_new_brand("Tecno", "смартфон Tecno Spark 20") is True
+
+    with patch.object(extractor, "_call_llm", return_value="NO"):
+        assert extractor.verify_new_brand("СуперДевайс", "купить СуперДевайс со скидкой") is False

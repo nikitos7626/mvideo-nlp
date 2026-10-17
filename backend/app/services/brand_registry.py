@@ -74,12 +74,12 @@ class BrandRegistry:
             return None
         return self.brands.get(brand.strip().lower())
 
-    def register_brand(self, alias: str, canonical: str | None = None) -> bool:
+    def register_brand(self, alias: str, canonical: str | None = None, persist: bool = True) -> bool:
         """
         Динамически регистрирует новый бренд:
         - добавляет в память (O(1))
         - уведомляет слушателей FlashText
-        - дописывает в CSV файл для персистентности
+        - дописывает в CSV файл для персистентности (если persist=True)
         """
         if not alias or len(alias.strip()) < 2:
             return False
@@ -103,12 +103,15 @@ class BrandRegistry:
             except Exception as e:
                 logger.error("Error in brand listener: %s", e)
 
-        # Сохраняем на диск
-        try:
-            with open(self.csv_path, "a", encoding="utf-8") as f:
-                f.write(f"{clean_alias},{clean_canon}\n")
-            logger.info("Successfully registered new brand: %s -> %s", clean_alias, clean_canon)
-            return True
-        except Exception as e:
-            logger.error("Failed to append brand to %s: %s", self.csv_path, e)
-            return False
+        # Сохраняем на диск при persist=True
+        if persist:
+            try:
+                with open(self.csv_path, "a", encoding="utf-8") as f:
+                    f.write(f"{clean_alias},{clean_canon}\n")
+                logger.info("Successfully registered new brand: %s -> %s", clean_alias, clean_canon)
+            except Exception as e:
+                logger.error("Failed to append brand to %s: %s", self.csv_path, e)
+                return False
+
+        return True
+
