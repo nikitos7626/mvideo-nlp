@@ -130,3 +130,24 @@ def test_pm_case_9_sony_xperia_1_vi(pipeline):
     assert preds["battery"] == "5000 мАч"
     assert preds["color"] == "чёрный"
     assert res["needs_review"] is False
+
+
+def test_pm_case_10_powerbank_20000mah(pipeline):
+    text = (
+        "Внешний аккумулятор Xiaomi Mi Power Bank 3 20000 mAh Fast Charge. "
+        "Емкость 20000 мАч, максимальная мощность зарядки 18 Вт, цвет черный. "
+        "Оснащен разъемами USB-A и USB-C."
+    )
+    res = pipeline.process_card({"raw_text": text})
+    assert res["category"] == "Внешние аккумуляторы (Power Bank)"
+    preds = {p["attribute"]: p["value"] for p in res["predictions"]}
+    assert preds["brand"] == "Xiaomi"
+    assert preds["battery"] == "20000 мАч"
+    assert preds["color"] == "чёрный"
+    assert preds["power"] == "18 Вт"
+    assert "Mi Power Bank" in preds["model"]
+    # Powerbank must NOT have screen or ROM
+    assert "screen_diagonal" not in preds
+    assert "memory_rom" not in preds
+    assert res["needs_review"] is False
+

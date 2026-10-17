@@ -52,6 +52,7 @@ class AttributeSanityValidator:
         "refrigerators": {"memory_rom", "memory_ram", "screen_diagonal", "refresh_rate", "resolution", "cpu", "os", "cleaning_type", "battery"},
         "headphones": {"screen_diagonal", "refresh_rate", "resolution", "memory_rom", "memory_ram", "cleaning_type", "defrost_system"},
         "tvs": {"cleaning_type", "defrost_system", "battery", "memory_ram"},
+        "powerbanks": {"memory_rom", "memory_ram", "screen_diagonal", "refresh_rate", "resolution", "cpu", "os", "cleaning_type", "defrost_system"},
     }
 
     # Корни реальных цветов
@@ -108,8 +109,10 @@ class AttributeSanityValidator:
                 return 25 <= val_mah <= 1500
             elif category_key == "vacuum_cleaners":
                 return 1000 <= val_mah <= 15000
+            elif category_key == "powerbanks":
+                return 1000 <= val_mah <= 80000
             else:
-                return 300 <= val_mah <= 40000
+                return 300 <= val_mah <= 80000
 
         # 3. Экран (Screen Diagonal)
         if attr_name == "screen_diagonal":
@@ -195,6 +198,9 @@ class AttributeSanityValidator:
         # 8. Модель (Model)
         if attr_name == "model":
             if any(w in val_lower for w in cls.BAD_MODEL_WORDS):
+                return False
+            from app.extractors.normalization.dictionaries import BRANDS
+            if val_lower in BRANDS:
                 return False
             # Модель не должна быть чисто служебным словом или числом без букв
             return len(val_lower) >= 2

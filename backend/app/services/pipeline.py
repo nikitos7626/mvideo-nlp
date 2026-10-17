@@ -57,6 +57,15 @@ CATEGORY_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_attrs": {"brand", "model", "color"},
         "gliner_labels": ["бренд", "модель", "цвет", "время работы"],
     },
+    "powerbanks": {
+        "name_ru": "Внешние аккумуляторы (Power Bank)",
+        "keywords": [
+            "повербанк", "пауэрбанк", "power bank", "powerbank", "внешний аккумулятор",
+            "портативный аккумулятор", "портативное зарядное", "аккумулятор портативный", "аккумулятор внешний"
+        ],
+        "required_attrs": {"brand", "model", "battery", "color"},
+        "gliner_labels": ["бренд", "модель", "ёмкость аккумулятора", "мощность", "цвет"],
+    },
     "default": {
         "name_ru": "Электроника и техника",
         "keywords": [],
@@ -115,6 +124,7 @@ class CascadedExtractionPipeline:
             "tvs",
             "laptops",
             "headphones",
+            "powerbanks",
             "smartphones",
         ]
         for cat_key in priority_order:
@@ -154,7 +164,7 @@ class CascadedExtractionPipeline:
                 if lines and len(lines[0]) < 120:
                     card["title"] = lines[0]
                 else:
-                    parts = re.split(r"(?<=[.!?])\s+", raw_text, 1)
+                    parts = re.split(r"(?<=[.!?])\s+", raw_text, maxsplit=1)
                     if len(parts) == 2 and len(parts[0]) < 120:
                         card["title"] = parts[0]
                     else:
@@ -221,9 +231,12 @@ class CascadedExtractionPipeline:
         if "brand" in predictions_map and "model" in predictions_map:
             b_val = predictions_map["brand"]["value"]
             m_val = predictions_map["model"]["value"]
-            clean_m = re.sub(rf"^{re.escape(b_val)}\s+", "", m_val, flags=re.IGNORECASE).strip()
-            if clean_m and len(clean_m) >= 2:
-                predictions_map["model"]["value"] = clean_m
+            if m_val.lower().strip() == b_val.lower().strip():
+                del predictions_map["model"]
+            else:
+                clean_m = re.sub(rf"^{re.escape(b_val)}\s+", "", m_val, flags=re.IGNORECASE).strip()
+                if clean_m and len(clean_m) >= 2 and clean_m.lower() != b_val.lower():
+                    predictions_map["model"]["value"] = clean_m
 
         # ------------------------------------------------------------------
         # ЭТАП 4: Валидация полноты и расчет уверенности
