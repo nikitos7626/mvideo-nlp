@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # LLM fallback (GigaSchool API)
     llm_api_base: str = "https://hub.gigaschool.ru/api/v1/llm/v1"
     llm_api_key: str = "hub-FozIDkycOQoaEHbYj7Qvq0Xl9PsZDJs-0_V_LmSVg1c"
-    llm_model: str = "ai-sage/GigaChat3-10B-A1.8B"
+    llm_model: str = "Qwen/Qwen3-Coder-Next"
+
 
     @property
     def cors_origins_list(self) -> list[str]:

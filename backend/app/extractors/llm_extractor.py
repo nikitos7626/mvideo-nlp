@@ -42,7 +42,7 @@ class StrictLlmFallbackExtractor:
             or os.environ.get("LLM_API_BASE")
             or getattr(settings, "llm_api_base", "https://hub.gigaschool.ru/api/v1/llm/v1")
         ).rstrip("/")
-        self.model = model or os.environ.get("LLM_MODEL") or getattr(settings, "llm_model", "ai-sage/GigaChat3-10B-A1.8B")
+        self.model = model or os.environ.get("LLM_MODEL") or getattr(settings, "llm_model", "Qwen/Qwen3-Coder-Next")
         self.timeout = timeout
         self.is_enabled = bool(self.api_key and self.api_key.strip())
 
@@ -52,7 +52,7 @@ class StrictLlmFallbackExtractor:
             logger.info("StrictLlmFallbackExtractor disabled (no LLM_API_KEY provided)")
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str | None:
-        """Безопасный вызов LLM с таймаутом и перехватом любых сбоев сети."""
+        """Безопасный вызов LLM с таймаутом и автоматическим фоллбэком на резервную модель при сбое."""
         if not self.is_enabled:
             return None
 
@@ -61,30 +61,40 @@ class StrictLlmFallbackExtractor:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.0,
-            "max_tokens": 200,
-        }
 
-        try:
-            with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices") or []
-                    if choices:
-                        return choices[0].get("message", {}).get("content", "").strip()
-                else:
-                    logger.warning("LLM API returned status %d: %s", resp.status_code, resp.text[:200])
-        except Exception as e:
-            logger.warning("LLM call failed or timed out: %s", e)
+        # Каскад моделей: приоритет высокоточной Qwen3-Coder-Next, затем быстрый фоллбэк
+        models_to_try = [self.model]
+        if "ai-sage/GigaChat3-10B-A1.8B" not in models_to_try:
+            models_to_try.append("ai-sage/GigaChat3-10B-A1.8B")
+
+        for m in models_to_try:
+            payload = {
+                "model": m,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.0,
+                "max_tokens": 250,
+            }
+
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(url, headers=headers, json=payload)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        choices = data.get("choices") or []
+                        if choices:
+                            raw_c = choices[0].get("message", {}).get("content")
+                            if raw_c and isinstance(raw_c, str) and raw_c.strip():
+                                return raw_c.strip()
+                    else:
+                        logger.warning("LLM API (%s) returned status %d: %s", m, resp.status_code, resp.text[:150])
+            except Exception as e:
+                logger.warning("LLM call to %s failed or timed out: %s", m, e)
 
         return None
+
 
     @staticmethod
     def _normalize_llm_value(attr: str, raw_val: Any) -> str | None:
