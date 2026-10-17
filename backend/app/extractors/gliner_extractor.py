@@ -15,121 +15,8 @@ from app.extractors.sanity import AttributeSanityValidator
 logger = logging.getLogger(__name__)
 
 
-class AttributeTypeValidator:
-    """Защита от контекстных галлюцинаций и путаницы единиц измерения."""
 
-    @staticmethod
-    def is_valid(attr_name: str, value: str) -> bool:
-        if not value or not value.strip():
-            return False
 
-        val_lower = value.lower().strip()
-
-        if attr_name == "refresh_rate":
-            # Частота обязана быть в Гц / Hz
-            if any(u in val_lower for u in ["мач", "mah", "дюйм", '"', "гб", "gb", "тб"]):
-                return False
-            return bool(re.search(r"\b\d{2,3}\s*(?:гц|hz)\b", val_lower)) or val_lower.isdigit()
-
-        if attr_name == "battery":
-            # Емкость аккумулятора не должна содержать дюймов, герц или памяти
-            if any(u in val_lower for u in ["гб", "gb", "тб", "дюйм", '"', "гц", "hz", "ватт", "вт"]):
-                return False
-            m = re.search(r"\d{3,5}", val_lower)
-            if not m:
-                return False
-            val_int = int(m.group(0))
-            if val_int < 1000 and not any(u in val_lower for u in ["мач", "mah", "ач", "а·ч"]):
-                return False
-            return True
-
-        if attr_name in ("memory_rom", "memory_ram"):
-            if any(u in val_lower for u in ['"', "дюйм", "мач", "mah", "гц", "hz"]):
-                return False
-            return bool(re.search(r"\b\d+\s*(?:гб|gb|тб|tb)\b", val_lower) or val_lower.isdigit())
-
-        if attr_name == "screen_diagonal":
-            if any(u in val_lower for u in ["гб", "gb", "тб", "tb", "мач", "mah", "гц", "hz"]):
-                return False
-            return bool(re.search(r"\d{1,2}(?:[.,]\d{1,2})?", val_lower))
-
-        if attr_name == "color":
-            # Цвет не может содержать цифры, технические характеристики или разрешения
-            if re.search(r"\d", val_lower):
-                return False
-            # Черный список маркетингового шума
-            bad_phrases = {"красивый дизайн", "дизайн", "стильный", "корпус", "новинка", "смартфон", "телефон", "камера", "зарядка"}
-            if any(bp in val_lower for bp in bad_phrases):
-                return False
-            # Цвет обязан содержать хотя бы один корень реального цвета
-            color_roots = {
-                "черн", "чёрн", "бел", "син", "красн", "сер", "золот", "зелен", "зелён",
-                "титан", "фиолет", "желт", "жёлт", "оранж", "розов", "серебр", "коричн",
-                "голуб", "бежев", "борд", "бронз", "перламутр", "мятн", "лавандов", "изумруд",
-                "графит", "black", "white", "blue", "red", "grey", "gray", "gold", "green",
-                "purple", "yellow", "orange", "pink", "silver", "brown", "cyan", "titanium",
-                "midnight", "starlight", "violet", "emerald", "mint"
-            }
-            return any(cr in val_lower for cr in color_roots)
-
-        if attr_name == "model":
-            # Модель не должна быть одиночным общим словом или описанием процессора/памяти/батареи/экрана
-            bad_model_words = {
-                "смартфон", "телефон", "ноутбук", "планшет", "телевизор",
-                "наушники", "беспроводные", "пылесос", "робот-пылесос",
-                "холодильник", "процессор", "ядерный", "аккумулятор", "батарея",
-                "пикселей", "разрешение", "память", "оперативной",
-                "экран", "дисплей", "камера", "дизайн", "динамик",
-                "корпус", "стекло", "зарядка", "быстрая зарядка",
-                "чехол", "пленка", "плёнка", "блок питания",
-            }
-            if any(w in val_lower for w in bad_model_words):
-                return False
-            return len(val_lower) >= 2
-
-        if attr_name == "cpu":
-            # Процессор не может быть общим названием категории или устройства
-            if val_lower in {"смартфон", "телефон", "ноутбук", "планшет", "телевизор", "экран", "дисплей", "камера", "аккумулятор", "батарея"}:
-                return False
-            known_chips = {
-                "intel", "core", "ryzen", "amd", "mediatek", "helio", "dimensity",
-                "snapdragon", "qualcomm", "apple", "bionic", "exynos", "m1", "m2",
-                "m3", "m4", "a14", "a15", "a16", "a17", "a18", "kirin", "tensor",
-                "celeron", "pentium", "geforce", "radeon"
-            }
-            return any(c in val_lower for c in known_chips) or bool(re.search(r"[a-zA-Z]", val_lower))
-
-        if attr_name == "cleaning_type":
-            return any(k in val_lower for k in ["сух", "влажн", "комбинир"])
-
-        if attr_name == "defrost_system":
-            return any(k in val_lower for k in ["no frost", "ноу фрост", "капельн", "ручн", "автомат"])
-
-        if attr_name == "display_tech":
-            # Белый список матриц дисплея (HLG, HDR10 и звук строго отсекаются)
-            return any(k in val_lower for k in AttributeTypeValidator.ALLOWED_DISPLAY_TECHS)
-
-        return True
-
-    ALLOWED_DISPLAY_TECHS: dict[str, str] = {
-        "triluminos": "Triluminos",
-        "oled": "OLED",
-        "олед": "OLED",
-        "amoled": "AMOLED",
-        "super amoled": "Super AMOLED",
-        "superamoled": "Super AMOLED",
-        "qled": "QLED",
-        "клед": "QLED",
-        "neo qled": "Neo QLED",
-        "ips": "IPS",
-        "ипс": "IPS",
-        "va": "VA",
-        "tn": "TN",
-        "nanocell": "NanoCell",
-        "mini led": "Mini-LED",
-        "mini-led": "Mini-LED",
-        "retina": "Retina",
-    }
 
 
 class GlinerExtractor:
@@ -353,7 +240,7 @@ class GlinerExtractor:
             return raw_clean
 
         if attr_key == "display_tech":
-            for k, canon in AttributeTypeValidator.ALLOWED_DISPLAY_TECHS.items():
+            for k, canon in AttributeSanityValidator.ALLOWED_DISPLAY_TECHS.items():
                 if k in low:
                     return canon
             return raw_clean

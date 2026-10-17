@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class CardIn(BaseModel):
+    external_id: str | None = None
+    category: str | None = None
+    title: str = ""
+    description: str = ""
+    raw_text: str | None = None
+    seller_attributes: dict = Field(default_factory=dict)
+
+
+class PredictionOut(BaseModel):
+    attribute: str
+    value: str
+    confidence: float
+    source: str
+    raw: str | None = None
+
+
+class CardOut(BaseModel):
+    external_id: str | None
+    category: str | None
+    predictions: list[PredictionOut]
+    missing: list[str]
+    overall_confidence: float = 0.0
+    needs_review: bool = False
+
+
+class BatchOut(BaseModel):
+    total: int
+    cards: list[CardOut]

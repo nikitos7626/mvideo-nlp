@@ -2,32 +2,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """
+    Конфигурация сервиса извлечения характеристик товаров М.Видео AI.
+    Все параметры могут быть переопределены через переменные окружения или .env файл.
+    """
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # Postgres
-    database_url: str = "postgresql+psycopg://app:app@localhost:5432/attr"
+    # Каскадный пайплайн (Tier 1 FlashText/Regex + Tier 2 GLiNER NER)
+    extractor: str = "cascade"           # cascade | regex | gliner
+    confidence_threshold: float = 0.87   # порог уверенности (ниже — флаг needs_review=True)
+    gliner_threshold: float = 0.30       # порог вероятности сущностей в GLiNER
 
-    # Пайплайн
-    extractor: str = "regex"           # regex | gliner | llm | cascade
-    confidence_threshold: float = 0.87 # ниже — в review
-
-    # Tier 2: локальная LLM (Ollama)
-    ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
-
-    # Tier 3: облачная LLM
-    cloud_llm_key: str | None = None
-    cloud_llm_model: str = "gpt-4o-mini"
-
-    # MCP
-    mcp_server_url: str = "http://localhost:8001/mcp"
-
-    # CORS
-    cors_origins: str = "http://localhost:5173"
+    # CORS (разрешенные источники веб-интерфейса)
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:8000"
 
     @property
     def cors_origins_list(self) -> list[str]:
