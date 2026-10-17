@@ -1,4 +1,9 @@
-from typing import NotRequired, Protocol, TypedDict
+from typing import Protocol, TypedDict
+
+try:
+    from typing import NotRequired
+except ImportError:
+    from typing_extensions import NotRequired
 
 
 class Prediction(TypedDict):
