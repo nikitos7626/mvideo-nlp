@@ -214,12 +214,9 @@ class GlinerExtractor:
         predictions: list[Prediction] = []
         seen_attrs: set[str] = set()
 
-        # Пасс 1: Заголовок (Title) — здесь самая чистая модель и бренд
+        # Пасс 1: Заголовок (Title) — извлекаем все целевые метки категории
         if title:
-            # Для заголовка берем только релевантные заголовку метки (бренд, модель, цвет)
-            t_labels = [lbl for lbl in (target_labels or self.TITLE_LABELS) if lbl in self.TITLE_LABELS]
-            if not t_labels:
-                t_labels = self.TITLE_LABELS
+            t_labels = target_labels or self.TITLE_LABELS
             title_entities = model.predict_entities(title, t_labels, threshold=self.threshold)
             for ent in sorted(title_entities, key=lambda x: float(x.get("score", 0.0)), reverse=True):
                 pred = self._entity_to_prediction(ent, is_title=True, category_key=category_key)

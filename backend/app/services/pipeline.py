@@ -155,10 +155,10 @@ class CascadedExtractionPipeline:
                 parts = re.split(r"(?<=[.!?])\s+", raw_text, 1)
                 if len(parts) == 2 and len(parts[0]) < 120:
                     card["title"] = parts[0]
-                    card["description"] = parts[1]
+                    card["description"] = raw_text
                 else:
                     card["title"] = raw_text
-                    card["description"] = ""
+                    card["description"] = raw_text
         elif raw_title and not raw_desc and (len(raw_title) > 100 or "\n" in raw_title):
             lines = [line.strip() for line in raw_title.split("\n") if line.strip()]
             if len(lines) > 1:
@@ -168,7 +168,10 @@ class CascadedExtractionPipeline:
                 parts = re.split(r"(?<=[.!?])\s+", raw_title, 1)
                 if len(parts) == 2 and len(parts[0]) < 120:
                     card["title"] = parts[0]
-                    card["description"] = parts[1]
+                    card["description"] = raw_title
+                else:
+                    card["title"] = raw_title
+                    card["description"] = raw_title
 
         # ------------------------------------------------------------------
         # ЭТАП 1: Определение категории товара
@@ -219,6 +222,14 @@ class CascadedExtractionPipeline:
                         continue
                     elif existing.get("confidence", 0) < p["confidence"]:
                         predictions_map[attr] = p
+
+        # Очистка названия бренда из начала названия модели ("Sony KD50X85TJ" -> "KD50X85TJ")
+        if "brand" in predictions_map and "model" in predictions_map:
+            b_val = predictions_map["brand"]["value"]
+            m_val = predictions_map["model"]["value"]
+            clean_m = re.sub(rf"^{re.escape(b_val)}\s+", "", m_val, flags=re.IGNORECASE).strip()
+            if clean_m and len(clean_m) >= 2:
+                predictions_map["model"]["value"] = clean_m
 
         # ------------------------------------------------------------------
         # ЭТАП 4: Валидация полноты и расчет уверенности
