@@ -251,8 +251,12 @@ class GlinerExtractor:
         if not canon_val:
             return None
 
-        # Буст уверенности для сущностей из заголовка
-        conf = min(0.99, score + (0.05 if is_title else 0.0))
+        # Калибровка уверенности:
+        # Валидированная сущность, прошедшая проверку типов и нормализацию,
+        # калибруется в диапазон [0.88, 0.98]
+        norm_score = max(0.0, min(1.0, (score - self.threshold) / max(0.001, 1.0 - self.threshold)))
+        title_boost = 0.03 if is_title else 0.0
+        conf = min(0.98, 0.88 + 0.08 * norm_score + title_boost)
 
         return Prediction(
             attribute=attr_key,

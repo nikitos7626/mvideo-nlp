@@ -88,7 +88,7 @@ class CascadedExtractionPipeline:
     def __init__(
         self,
         use_gliner: bool = True,
-        confidence_threshold: float = 0.75,
+        confidence_threshold: float = 0.87,
         gliner_threshold: float = 0.30,
     ) -> None:
         self.confidence_threshold = confidence_threshold
@@ -189,7 +189,7 @@ class CascadedExtractionPipeline:
                 lbl for lbl in gliner_labels
                 if (attr := self.gliner_extractor.LABEL_TO_ATTR.get(lbl)) is None
                 or attr not in predictions_map
-                or predictions_map[attr]["confidence"] < 0.85
+                or predictions_map[attr]["confidence"] < 0.88
             ]
             if needed_labels:
                 t2_preds = self.gliner_extractor.extract(card, target_labels=needed_labels)

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Пайплайн
     extractor: str = "regex"           # regex | gliner | llm | cascade
-    confidence_threshold: float = 0.75 # ниже — в review
+    confidence_threshold: float = 0.87 # ниже — в review
 
     # Tier 2: локальная LLM (Ollama)
     ollama_url: str = "http://localhost:11434"

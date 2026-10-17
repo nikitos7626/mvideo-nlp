@@ -1,5 +1,7 @@
+import os
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.services.pipeline import CascadedExtractionPipeline
 from scripts.pm_cases import cases

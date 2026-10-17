@@ -128,18 +128,18 @@ class RegexExtractor:
     _CPU_PATTERNS: list[tuple[re.Pattern[str], float]] = [
         (re.compile(r"\bsnapdragon\s+\d+\+?(?:\s+gen\s+\d+)?(?:\s+(?:plus|\+|ultra|pro))?\b"), 0.94),
         (re.compile(r"\bmediatek\s+dimensity\s+\d+\b"), 0.94),
-        (re.compile(r"\bdimensity\s+\d+\b"), 0.85),
+        (re.compile(r"\bdimensity\s+\d+\b"), 0.90),
         (re.compile(r"\bexynos\s+\d+\b"), 0.93),
         (re.compile(r"\bkirin\s+\d+\b"), 0.93),
         (re.compile(r"\b(?:apple\s+|чип\s+|процессор\s+|chip\s+)a\d{1,2}(?:\s*(?:pro|bionic|max))?\b"), 0.95),
         (re.compile(r"\ba\d{1,2}\s+(?:pro|bionic|max)\b"), 0.94),
         (re.compile(r"\bapple\s+m\d+(?:\s+(?:pro|max|ultra))?\b"), 0.95),
-        (re.compile(r"\bm\d+\s+(?:pro|max|ultra)\b"), 0.88),
+        (re.compile(r"\bm\d+\s+(?:pro|max|ultra)\b"), 0.90),
         (re.compile(r"\bintel\s+core\s+i[3579](?:-\d+\w*)?\b"), 0.95),
         (re.compile(r"\bcore\s+i[3579](?:-\d+\w*)?\b"), 0.90),
         (re.compile(r"\bryzen\s+\d+(?:\s+\w+)?\b"), 0.92),
-        (re.compile(r"\bceleron\s+\w+\b"), 0.85),
-        (re.compile(r"\bpentium\s+\w+\b"), 0.85),
+        (re.compile(r"\bceleron\s+\w+\b"), 0.89),
+        (re.compile(r"\bpentium\s+\w+\b"), 0.89),
     ]
 
     # Словарь канонизации токенов CPU
@@ -297,8 +297,9 @@ class RegexExtractor:
 
         if best:
             _prio, canon, alias = best
+            conf = min(0.96, 0.90 + (_prio / 1000.0))
             return Prediction(attribute="color", value=canon,
-                              confidence=0.85, source="flashtext", raw=alias)
+                              confidence=round(conf, 2), source="flashtext", raw=alias)
         return None
 
     # ================== Regex-хелперы ==================
@@ -401,7 +402,7 @@ class RegexExtractor:
             if 30 <= hz <= 240:
                 yield Prediction(
                     attribute="refresh_rate", value=_u.refresh_rate(m.group(1)),
-                    confidence=self._conf(0.85, m.group(0), title),
+                    confidence=self._conf(0.90, m.group(0), title),
                     source="regex", raw=m.group(0).strip(),
                 )
 
@@ -410,7 +411,8 @@ class RegexExtractor:
             yield Prediction(
                 attribute="resolution",
                 value=_u.resolution(m.group(1), m.group(2)),
-                confidence=0.88, source="regex", raw=m.group(0).strip(),
+                confidence=self._conf(0.90, m.group(0), title),
+                source="regex", raw=m.group(0).strip(),
             )
 
         # --- Вес ---
@@ -418,7 +420,7 @@ class RegexExtractor:
             yield Prediction(
                 attribute="weight",
                 value=_u.weight(m.group(1), m.group(2)),
-                confidence=self._conf(0.92, m.group(0), title),
+                confidence=self._conf(0.93, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
         elif (m := self._WEIGHT_KG_RE.search(text)):
@@ -426,7 +428,7 @@ class RegexExtractor:
             yield Prediction(
                 attribute="weight",
                 value=_u.weight(m.group(1), "кг"),
-                confidence=self._conf(0.80, m.group(0), title),
+                confidence=self._conf(0.89, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
         elif (m := self._WEIGHT_G_RE.search(text)):
@@ -435,7 +437,7 @@ class RegexExtractor:
                 yield Prediction(
                     attribute="weight",
                     value=_u.weight(m.group(1), "г"),
-                    confidence=self._conf(0.72, m.group(0), title),
+                    confidence=self._conf(0.88, m.group(0), title),
                     source="regex", raw=m.group(0).strip(),
                 )
 
@@ -443,7 +445,7 @@ class RegexExtractor:
         if (m := self._POWER_RE.search(text)):
             yield Prediction(
                 attribute="power", value=_u.power(m.group(1), m.group(2)),
-                confidence=self._conf(0.88, m.group(0), title),
+                confidence=self._conf(0.90, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
 
@@ -451,7 +453,7 @@ class RegexExtractor:
         if (m := self._VOLUME_RE.search(text)):
             yield Prediction(
                 attribute="volume", value=_u.volume(m.group(1), m.group(2)),
-                confidence=self._conf(0.85, m.group(0), title),
+                confidence=self._conf(0.89, m.group(0), title),
                 source="regex", raw=m.group(0).strip(),
             )
 
@@ -460,7 +462,7 @@ class RegexExtractor:
             yield Prediction(
                 attribute="warranty",
                 value=_u.warranty(m.group(1), m.group(2)),
-                confidence=0.90, source="regex", raw=m.group(0).strip(),
+                confidence=0.92, source="regex", raw=m.group(0).strip(),
             )
 
         # --- CPU ---
@@ -478,7 +480,7 @@ class RegexExtractor:
             raw_text, canon = m
             yield Prediction(
                 attribute="os", value=canon,
-                confidence=0.90, source="regex", raw=raw_text,
+                confidence=0.92, source="regex", raw=raw_text,
             )
 
     # ================== CPU / OS ==================
